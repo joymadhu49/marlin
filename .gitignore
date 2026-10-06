@@ -1,0 +1,7 @@
+node_modules
+chromium/
+dist/
+vendor/
+.keys/
+.DS_Store
+*.log

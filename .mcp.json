@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "marlin": {
+      "command": "/Applications/Marlin.app/Contents/Resources/node/bin/node",
+      "args": ["/Applications/Marlin.app/Contents/Resources/app/src/cli.js", "mcp"]
+    }
+  }
+}

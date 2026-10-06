@@ -1,0 +1,27 @@
+{
+  "name": "marlin",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Chromium browser built for AI agents: extensions, wallets, screenshots, MCP.",
+  "type": "module",
+  "bin": {
+    "marlin": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js start",
+    "mcp": "node src/cli.js mcp",
+    "fetch-chromium": "node src/cli.js fetch-chromium",
+    "app": "bash app/build-app.sh",
+    "test": "node test/e2e.js",
+    "release": "bash scripts/release.sh",
+    "bench:memory": "node test/memory-bench.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "puppeteer-core": "^25.12.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "repository": "github:joymadhu49/marlin",
+  "license": "MIT"
+}

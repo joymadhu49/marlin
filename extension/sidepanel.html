@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marlin Agent</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/32.png" alt="" width="18" height="18">
+      <span>Marlin</span>
+      <span id="conn" class="conn" title="Offline"></span>
+    </div>
+    <div class="actions">
+      <button id="newChat" class="icon" title="New chat" aria-label="New chat">
+        <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
+      </button>
+      <button id="openSettings" class="icon" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="feed" class="feed">
+    <div id="empty" class="empty">
+      <h1>What should I do in this browser?</h1>
+      <p>I can browse, read pages, take screenshots, install extensions and work inside wallets like MetaMask or Rabby.</p>
+      <div class="chips">
+        <button class="chip">Install MetaMask and show me its popup</button>
+        <button class="chip">Take a screenshot of the current tab</button>
+        <button class="chip">List my extensions and unlock my wallet</button>
+      </div>
+    </div>
+  </main>
+
+  <section id="settings" class="settings" hidden>
+    <div class="settings-head">
+      <button id="closeSettings" class="icon" aria-label="Back"><svg viewBox="0 0 16 16"><path d="M10 3L5 8l5 5"/></svg></button>
+      <h2>Settings</h2>
+    </div>
+
+    <div class="group">
+      <h3>Model access</h3>
+      <p id="keyStatus" class="muted"></p>
+      <form id="keyForm" class="row">
+        <input id="keyInput" type="password" placeholder="Paste an OpenRouter API key" autocomplete="off">
+        <button class="btn">Save</button>
+      </form>
+    </div>
+
+    <div class="group">
+      <h3>Wallet signing</h3>
+      <p class="muted">When an agent presses Confirm, Sign, Send or Approve inside a wallet.</p>
+      <div class="seg" id="policy">
+        <button data-v="ask">Ask me</button>
+        <button data-v="smart">Logins only</button>
+        <button data-v="allow">Everything</button>
+      </div>
+      <p id="policyHint" class="muted"></p>
+    </div>
+
+    <div class="group">
+      <h3>Secrets</h3>
+      <p class="muted">Stored in your macOS Keychain. Agents can type them into fields but never read them.</p>
+      <ul id="secretList" class="list"></ul>
+      <form id="secretForm" class="stack">
+        <input id="secretName" placeholder="Name, for example metamask" autocomplete="off" required pattern="[\w.\-]{1,64}">
+        <div class="row">
+          <input id="secretValue" type="password" placeholder="Password" autocomplete="new-password" required>
+          <button class="btn">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="group">
+      <h3>Extensions</h3>
+      <ul id="extList" class="list"></ul>
+      <form id="installForm" class="row">
+        <input id="installInput" placeholder="Web Store link or extension ID" autocomplete="off" required>
+        <button class="btn">Install</button>
+      </form>
+    </div>
+
+    <div class="group">
+      <h3>Connect other agents</h3>
+      <p class="muted">MCP server command for Claude Code, Codex, Cursor or Hermes</p>
+      <div class="code"><code id="mcpCmd"></code><button class="copy" data-copy="mcpCmd">Copy</button></div>
+      <p class="muted">Playwright, Puppeteer or browser use over CDP</p>
+      <div class="code"><code id="cdpUrl"></code><button class="copy" data-copy="cdpUrl">Copy</button></div>
+    </div>
+  </section>
+
+  <footer class="composer">
+    <div id="toast" class="toast" hidden></div>
+    <form id="chatForm">
+      <textarea id="input" rows="1" placeholder="Ask Marlin to do something"></textarea>
+      <div class="composer-row">
+        <select id="model" title="Model"></select>
+        <button id="send" class="send" aria-label="Send">
+          <svg class="i-send" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5"/></svg>
+          <svg class="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
+        </button>
+      </div>
+    </form>
+  </footer>
+
+  <div id="lightbox" class="lightbox" hidden><img alt="Screenshot"></div>
+  <script src="config.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
