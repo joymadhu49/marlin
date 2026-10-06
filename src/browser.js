@@ -157,6 +157,7 @@ export class MarlinBrowser extends EventEmitter {
   }
 
   async #onTarget(t, verb) {
+    if (verb === 'opened') this.#redirectAbout(t);
     const type = t.type();
     if (!isVisible(t)) return;
     if (type !== 'page' && type !== 'other') return;
@@ -189,8 +190,16 @@ export class MarlinBrowser extends EventEmitter {
     }
   }
 
+  /** Chromium's About page has no updater; show Marlin's, which checks through Sparkle. */
+  async #redirectAbout(t) {
+    if (!/^chrome:\/\/(settings\/help|help)\b/.test(t.url()) || !this.builtinId) return;
+    const page = await t.page().catch(() => null);
+    await page?.goto(`chrome-extension://${this.builtinId}/about.html`).catch(() => {});
+  }
+
   /** Wallets reuse open windows: a dapp request often shows up as a new route in an existing page. */
   #onChanged(t) {
+    this.#redirectAbout(t);
     if (!isVisible(t)) return;
     const url = t.url();
     const ext = this.extensionForUrl(url);

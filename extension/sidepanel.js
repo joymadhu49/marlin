@@ -139,6 +139,7 @@ function handle(m) {
     case 'toast': toast(m.text); break;
     case 'error': toast(m.text); break;
     case 'reset_done': feed.replaceChildren(); break;
+    case 'update_check': toast(m.text); break;
   }
 }
 
@@ -229,6 +230,7 @@ function renderSettings() {
     el.append(li);
   }
 
+  $('#aboutLine').textContent = `Marlin ${s.version || ''} on Chromium ${s.chromium || ''}`;
   $('#mcpCmd').textContent = s.mcpCommand || '';
   $('#cdpUrl').textContent = s.cdp || '';
   if (s.model && $('#model').value !== s.model && [...$('#model').options].some((o) => o.value === s.model)) $('#model').value = s.model;
@@ -242,6 +244,7 @@ $('#secretForm').addEventListener('submit', (e) => {
   $('#secretName').value = ''; $('#secretValue').value = '';
   toast('Secret saved to Keychain');
 });
+$('#checkUpdate').onclick = () => send({ type: 'check_update' });
 $('#installForm').addEventListener('submit', (e) => { e.preventDefault(); send({ type: 'install', source: $('#installInput').value.trim() }); $('#installInput').value = ''; });
 document.querySelectorAll('.copy').forEach((b) => b.addEventListener('click', () => {
   navigator.clipboard.writeText(document.getElementById(b.dataset.copy).textContent);

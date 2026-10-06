@@ -5,7 +5,8 @@
 //   GET  /ws?token=...           sidebar channel (chat, approvals, settings)
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
 import { WebSocketServer } from 'ws';
 import { join } from 'node:path';
 import { paths, loadConfig, saveConfig, readJson, writeJson, ROOT } from './paths.js';
@@ -103,6 +104,8 @@ export async function startDaemon({ headless } = {}) {
       extensions: await mb.listExtensions().catch(() => []),
       cdp: `http://127.0.0.1:${config.cdpPort}`,
       mcpCommand: `${process.execPath} ${join(ROOT, 'src', 'cli.js')} mcp`,
+      version: VERSION,
+      chromium: (await mb.browser.version().catch(() => '')).split('/')[1] || '',
     });
     status().then(reply);
     for (const [id, p] of pending) reply({ type: 'approval', id, extension: p.extension, action: p.action, url: p.url, screenshot: p.screenshot });
@@ -142,6 +145,7 @@ export async function startDaemon({ headless } = {}) {
             break;
           }
           case 'status': reply(await status()); break;
+          case 'check_update': reply({ type: 'update_check', text: checkForUpdates() }); break;
         }
       } catch (e) {
         reply({ type: 'error', text: e.message });
@@ -170,6 +174,16 @@ export async function startDaemon({ headless } = {}) {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   return { mb, tools, server, shutdown };
+}
+
+const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+
+/** Starts the Sparkle helper inside Marlin.app; it shows its own window with the result. */
+function checkForUpdates() {
+  const helper = join(ROOT, '..', '..', 'Helpers', 'Marlin Updater.app', 'Contents', 'MacOS', 'Marlin Updater');
+  if (!existsSync(helper)) return 'This is a development build. Update it with git pull and install.sh.';
+  spawn(helper, ['--check-now'], { detached: true, stdio: 'ignore' }).unref();
+  return 'Checking. A window shows the result.';
 }
 
 function hostOk(host, port) {

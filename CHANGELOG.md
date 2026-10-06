@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- chrome://settings/help now opens Marlin's About page with the Marlin and Chromium versions and a working Check for updates button. Chromium's built in updater had no service behind it and always showed "error code 0".
+- Check for updates in the sidebar Settings.
+
 ## 0.2.0
 
 - First public release: signed and notarized DMG with automatic updates through Sparkle.

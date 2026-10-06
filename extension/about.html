@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>About Marlin</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <style>
+    body { align-items: center; justify-content: center; padding: 32px 16px; }
+    .card { width: 100%; max-width: 460px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+    .head { display: flex; align-items: center; gap: 12px; }
+    .head img { width: 44px; height: 44px; border-radius: 10px; }
+    .head h1 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+    .rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; }
+    .rows span:nth-child(odd) { color: var(--muted); }
+    .rows span:nth-child(even) { font-family: var(--mono); font-size: 12px; }
+    #status { min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <img src="icons/128.png" alt="">
+      <div><h1>Marlin</h1><p class="muted">Chromium browser built for AI agents</p></div>
+    </div>
+    <div class="rows">
+      <span>Marlin</span><span id="ver">checking</span>
+      <span>Chromium</span><span id="chromium">checking</span>
+      <span>Updates</span><span>Sparkle, from GitHub releases</span>
+    </div>
+    <div class="row"><button id="check" class="btn primary">Check for updates</button></div>
+    <p id="status" class="muted"></p>
+  </div>
+  <script src="config.js"></script>
+  <script src="about.js"></script>
+</body>
+</html>
