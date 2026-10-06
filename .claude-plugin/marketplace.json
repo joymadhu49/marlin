@@ -1,11 +1,17 @@
 {
   "name": "marlin",
-  "owner": { "name": "Joy Madhu", "url": "https://github.com/joymadhu49" },
+  "owner": {
+    "name": "Joy Madhu",
+    "url": "https://github.com/joymadhu49"
+  },
   "plugins": [
     {
       "name": "marlin",
       "source": "./",
       "description": "Chromium browser for AI agents: MCP tools for browsing, extensions and wallets, plus the marlin-browser skill."
     }
-  ]
+  ],
+  "metadata": {
+    "description": "Marlin: a Chromium browser built for AI agents, with MCP tools for browsing, extensions and crypto wallets."
+  }
 }
