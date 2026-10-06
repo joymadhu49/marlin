@@ -5,14 +5,15 @@
 //   GET  /ws?token=...           sidebar channel (chat, approvals, settings)
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { execFile, spawn } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { WebSocketServer } from 'ws';
 import { join } from 'node:path';
 import { paths, loadConfig, saveConfig, readJson, writeJson, ROOT } from './paths.js';
 import { MarlinBrowser } from './browser.js';
 import { buildTools } from './tools.js';
 import { Agent, listModels, openRouterKey } from './agent.js';
+import { runUpdater, canUpdate } from './updates.js';
 import { listSecrets, setSecret, removeSecret, warmSecrets } from './vault.js';
 
 export async function startDaemon({ headless } = {}) {
@@ -49,6 +50,22 @@ export async function startDaemon({ headless } = {}) {
   const agent = new Agent({ tools, config, emit: broadcast });
   mb.on('event', (text) => broadcast({ type: 'browser_event', text }));
 
+  // Updates live in the browser UI: a quiet check after the human opens Marlin.
+  let update = { event: 'idle' };
+  const onUpdate = (e) => { update = { ...update, ...e }; broadcast({ type: 'update_status', ...update }); };
+  async function checkUpdate() {
+    if (['checking', 'downloading', 'progress', 'extracting', 'installing', 'restarting'].includes(update.event)) return;
+    update = { event: 'checking' };
+    broadcast({ type: 'update_status', ...update });
+    await runUpdater('check', onUpdate);
+  }
+  function installUpdate() {
+    update = { ...update, event: 'downloading', percent: 0 };
+    broadcast({ type: 'update_status', ...update });
+    runUpdater('install', onUpdate);
+  }
+  if (!config.headless && canUpdate()) setTimeout(checkUpdate, 8000);
+
   const server = http.createServer(async (req, res) => {
     const send = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (!hostOk(req.headers.host, config.port)) return send(403, { error: 'bad host' });
@@ -67,6 +84,12 @@ export async function startDaemon({ headless } = {}) {
         broadcast({ type: 'external_tool', name: tool.name, args });
         const out = await tool.run(args);
         return send(200, out);
+      }
+      if (url.pathname === '/update' && req.method === 'POST') {
+        const { install } = await readBody(req);
+        if (install) { installUpdate(); return send(200, { ok: true, event: 'installing' }); }
+        await checkUpdate();
+        return send(200, update);
       }
       if (req.method === 'POST' && url.pathname === '/shutdown') {
         send(200, { ok: true });
@@ -105,6 +128,7 @@ export async function startDaemon({ headless } = {}) {
       cdp: `http://127.0.0.1:${config.cdpPort}`,
       mcpCommand: `${process.execPath} ${join(ROOT, 'src', 'cli.js')} mcp`,
       version: VERSION,
+      update,
       chromium: (await mb.browser.version().catch(() => '')).split('/')[1] || '',
     });
     status().then(reply);
@@ -145,7 +169,8 @@ export async function startDaemon({ headless } = {}) {
             break;
           }
           case 'status': reply(await status()); break;
-          case 'check_update': reply({ type: 'update_check', text: checkForUpdates() }); break;
+          case 'check_update': checkUpdate(); break;
+          case 'install_update': installUpdate(); break;
         }
       } catch (e) {
         reply({ type: 'error', text: e.message });
@@ -177,14 +202,6 @@ export async function startDaemon({ headless } = {}) {
 }
 
 const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-
-/** Starts the Sparkle helper inside Marlin.app; it shows its own window with the result. */
-function checkForUpdates() {
-  const helper = join(ROOT, '..', '..', 'Helpers', 'Marlin Updater.app', 'Contents', 'MacOS', 'Marlin Updater');
-  if (!existsSync(helper)) return 'This is a development build. Update it with git pull and install.sh.';
-  spawn(helper, ['--check-now'], { detached: true, stdio: 'ignore' }).unref();
-  return 'Checking. A window shows the result.';
-}
 
 function hostOk(host, port) {
   return host === `127.0.0.1:${port}` || host === `localhost:${port}`;

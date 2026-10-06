@@ -131,7 +131,7 @@ Install or update on any Mac (no Finder windows, no prompts). This also connects
 curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-marlin.sh | bash
 ```
 
-- `marlin version` shows the installed version. `marlin update` checks for a release (Sparkle shows a window if one exists). Marlin also checks quietly whenever the human opens the app.
+- `marlin version` shows the installed version. `marlin update` checks for a release, `marlin update --install` installs it (Marlin closes and reopens, so wallets lock again). Humans see the same in the browser: About page (chrome://settings/help) and a banner in the sidebar. Do not install an update in the middle of a task without asking.
 - `marlin setup` reconnects the agents (MCP server + this skill) if a config was lost.
 - From a source checkout: `bash install.sh`.
 - New agent sessions pick up the MCP server. Hermes's Telegram gateway needs a restart.

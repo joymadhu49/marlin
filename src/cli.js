@@ -22,7 +22,7 @@ const HELP = `marlin, a Chromium browser built for AI agents
   marlin secret list | rm <name>
   marlin config [key] [value]     e.g. marlin config signPolicy allow
   marlin setup                    connect Claude Code, Codex and Hermes (MCP + skill)
-  marlin update                   check for a new Marlin release (Sparkle)
+  marlin update [--install]       check for (or install) a new Marlin release
   marlin version
   marlin fetch-chromium           download the latest Chromium snapshot
 
@@ -114,18 +114,31 @@ async function main() {
       process.exit(spawnSync('bash', [join(ROOT, 'install.sh'), '--agents'], { stdio: 'inherit' }).status ?? 1);
     }
     case 'update': {
-      const { spawn } = await import('node:child_process');
-      const { join } = await import('node:path');
-      const { existsSync } = await import('node:fs');
-      const { ROOT } = await import('./paths.js');
-      const helper = join(ROOT, '..', '..', 'Helpers', 'Marlin Updater.app', 'Contents', 'MacOS', 'Marlin Updater');
-      if (!existsSync(helper)) {
+      // Same flow as the About page: check, or install with --install.
+      const { daemonUp } = await import('./client.js');
+      const { runUpdater, canUpdate } = await import('./updates.js');
+      if (!canUpdate()) {
         console.log('This copy is a dev checkout. Update with: git pull && bash install.sh');
         console.log('Or install the release: curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-marlin.sh | bash');
         return;
       }
-      spawn(helper, ['--check-now'], { detached: true, stdio: 'ignore' }).unref();
-      console.log('Checking for updates. A window appears if a new version is available.');
+      const install = flag('--install');
+      const show = (e) => {
+        if (e.event === 'available') console.log(`Marlin ${e.version} is available.${install ? '' : ' Install with: marlin update --install'}`);
+        else if (e.event === 'none') console.log('Marlin is up to date.');
+        else if (e.event === 'progress') process.stdout.write(`\rDownloading ${e.percent}%`);
+        else if (e.event === 'restarting') console.log('\nInstalling. Marlin will close and reopen.');
+        else if (e.event === 'error') console.log(`Update error: ${e.message}`);
+      };
+      if (install && await daemonUp()) {
+        // Let the running daemon drive it so the browser UI shows progress too.
+        const { readJson, paths } = await import('./paths.js');
+        const { port, token } = readJson(paths.state, {});
+        await fetch(`http://127.0.0.1:${port}/update`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{"install":true}' });
+        console.log('Installing in Marlin. It will close and reopen when ready.');
+        return;
+      }
+      await runUpdater(install ? 'install' : 'check', show);
       return;
     }
     case 'version': {

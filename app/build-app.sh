@@ -83,8 +83,6 @@ NODE="$C/Resources/node/bin/node"
 CLI="$C/Resources/app/src/cli.js"
 mkdir -p "$HOME/Library/Application Support/Marlin"
 LOG="$HOME/Library/Application Support/Marlin/marlin.log"
-# The human opened Marlin: a good moment for a quiet update check.
-"$C/Helpers/Marlin Updater.app/Contents/MacOS/Marlin Updater" >/dev/null 2>&1 &
 if "$NODE" "$CLI" status 2>/dev/null | grep -q '^Running'; then
   exec "$NODE" "$CLI" open
 fi

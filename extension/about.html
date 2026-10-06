@@ -14,6 +14,14 @@
     .rows span:nth-child(odd) { color: var(--muted); }
     .rows span:nth-child(even) { font-family: var(--mono); font-size: 12px; }
     #status { min-height: 18px; }
+    .update { border: 1px solid var(--border-strong); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--raised); }
+    .update-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .notes { font-size: 12px; color: var(--muted); }
+    .notes h2 { display: none; }
+    .notes p { margin: 0 0 4px; }
+    .notes ul { margin: 0; padding-left: 18px; }
+    .bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+    #barFill { height: 100%; width: 0; background: var(--text); transition: width .2s ease; }
   </style>
 </head>
 <body>
@@ -27,7 +35,15 @@
       <span>Chromium</span><span id="chromium">checking</span>
       <span>Updates</span><span>Sparkle, from GitHub releases</span>
     </div>
-    <div class="row"><button id="check" class="btn primary">Check for updates</button></div>
+    <div id="update" class="update" hidden>
+      <div class="update-head"><strong id="updTitle"></strong><span id="updSize" class="muted"></span></div>
+      <div id="updNotes" class="notes"></div>
+      <div id="bar" class="bar" hidden><div id="barFill"></div></div>
+    </div>
+    <div class="row">
+      <button id="check" class="btn">Check for updates</button>
+      <button id="install" class="btn primary" hidden>Install and restart</button>
+    </div>
     <p id="status" class="muted"></p>
   </div>
   <script src="config.js"></script>

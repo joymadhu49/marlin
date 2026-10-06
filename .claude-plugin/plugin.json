@@ -1,7 +1,7 @@
 {
   "name": "marlin",
   "description": "Marlin: a Chromium browser built for AI agents. Install extensions, unlock wallets, connect dapps and sign with human approval for risky requests.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "Joy Madhu",
     "url": "https://x.com/zx_joy_"

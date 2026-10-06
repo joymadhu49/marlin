@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Updates happen inside the browser: Marlin checks quietly after you open it, the sidebar shows when a new version is out, and the About page shows release notes, an Install and restart button and download progress. Sparkle still downloads, verifies the signature and installs.
+- marlin update checks from the terminal and marlin update --install installs, with progress shown in the browser too.
+
 ## 0.2.1
 
 - chrome://settings/help now opens Marlin's About page with the Marlin and Chromium versions and a working Check for updates button. Chromium's built in updater had no service behind it and always showed "error code 0".

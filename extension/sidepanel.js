@@ -114,7 +114,7 @@ $('#lightbox').onclick = () => { $('#lightbox').hidden = true; };
 // ---------- messages from the daemon ----------
 function handle(m) {
   switch (m.type) {
-    case 'status': state.status = m; renderSettings(); setBusy(m.busy); break;
+    case 'status': state.status = m; renderSettings(); setBusy(m.busy); renderUpdate(m.update); break;
     case 'models': renderModels(m.models); break;
     case 'run_start': setBusy(true); break;
     case 'run_end': setBusy(false); if (m.error) add(div('msg-err', m.error)); break;
@@ -139,9 +139,21 @@ function handle(m) {
     case 'toast': toast(m.text); break;
     case 'error': toast(m.text); break;
     case 'reset_done': feed.replaceChildren(); break;
-    case 'update_check': toast(m.text); break;
+    case 'update_status': renderUpdate(m); break;
   }
 }
+
+// ---------- updates ----------
+function renderUpdate(u) {
+  if (!u) return;
+  const show = u.version && u.event !== 'none' && u.event !== 'checking';
+  $('#updBanner').hidden = !show;
+  if (!show) return;
+  const working = { downloading: 'Downloading', progress: `Downloading ${u.percent || 0}%`, extracting: 'Verifying', installing: 'Installing', restarting: 'Restarting Marlin' }[u.event];
+  $('#updText').textContent = working ? `Marlin ${u.version}: ${working}` : `Marlin ${u.version} is available`;
+  $('#updInstall').hidden = !!working;
+}
+$('#updInstall').onclick = () => { $('#updInstall').disabled = true; send({ type: 'install_update' }); };
 
 // ---------- composer ----------
 const input = $('#input');
