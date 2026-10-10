@@ -2,7 +2,7 @@ name: Platform regressions
 on:
   pull_request:
   push:
-    branches: [main, 'release/windows-*']
+    branches: [main, 'release/windows-v*']
 permissions:
   contents: read
 jobs:

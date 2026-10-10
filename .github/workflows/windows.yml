@@ -11,7 +11,7 @@ on:
       - 'install.ps1'
       - 'marlin.cmd'
   push:
-    branches: ['release/windows-*']
+    branches: ['release/windows-v*']
   workflow_dispatch:
 permissions:
   contents: read
