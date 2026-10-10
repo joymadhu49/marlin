@@ -3,7 +3,7 @@
 // MARLIN_APP_ROOT=C:\...\dist\Marlin-win32-x64 node test/windows-smoke.js
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
@@ -151,8 +151,16 @@ try {
       '-File', join(launcherRoot, 'install.ps1'), '-InstallDir', launcherRoot,
       '-NoPath', '-NoShortcut',
     ], { env, cwd: home, windowsHide: true, timeout: 20_000, maxBuffer: 1024 * 1024 });
-    assert.match(result.stdout, /Installed Marlin to/);
-    assert.ok(result.stdout.includes(launcherRoot), 'Installer did not report the literal destination.');
+    const diagnostic = `Requested destination: ${launcherRoot}\nInstaller stdout:\n${result.stdout}\nInstaller stderr:\n${result.stderr}`;
+    const reported = result.stdout.match(/Installed Marlin to (.+?)\. Open a new terminal/s)?.[1].trim();
+    assert.ok(reported, `Installer did not report a destination.\n${diagnostic}`);
+    // PowerShell/.NET can expand an 8.3 TEMP path or change its casing. Verify
+    // filesystem identity instead of requiring the same printed spelling.
+    let actualDestination;
+    try { actualDestination = realpathSync.native(reported); }
+    catch (cause) { throw new Error(`Installer reported an inaccessible destination: ${reported}\n${diagnostic}`, { cause }); }
+    assert.equal(actualDestination.toLowerCase(), realpathSync.native(launcherRoot).toLowerCase(), diagnostic);
+    assert.ok(lstatSync(launcherRoot).isSymbolicLink(), `In-place install replaced the package junction.\n${diagnostic}`);
     assert.equal((await runLauncher('version')).stdout.trim(), version);
   });
 
