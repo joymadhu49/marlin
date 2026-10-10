@@ -1,4 +1,4 @@
-// Download a Chrome Web Store extension as a CRX, verify it, and unpack it
+// Download a Chrome Web Store extension as a CRX, parse it, and unpack it
 // with its public key injected into manifest.json so the unpacked copy keeps
 // the exact same extension ID as the store version.
 import { createHash } from 'node:crypto';
@@ -28,26 +28,46 @@ export function idFromPublicKey(der) {
 function readProto(buf) {
   const out = [];
   let i = 0;
+  const requireBytes = (length) => {
+    if (length > buf.length - i) throw new Error('Invalid CRX protobuf: truncated field');
+  };
   const varint = () => {
-    let shift = 0n, v = 0n;
-    for (;;) {
+    let v = 0n;
+    for (let n = 0; n < 10; n++) {
+      requireBytes(1);
       const b = buf[i++];
-      v |= BigInt(b & 0x7f) << shift;
+      if (n === 9 && b > 1) throw new Error('Invalid CRX protobuf: varint overflow');
+      v |= BigInt(b & 0x7f) << BigInt(n * 7);
       if (!(b & 0x80)) return v;
-      shift += 7n;
     }
+    throw new Error('Invalid CRX protobuf: varint overflow');
   };
   while (i < buf.length) {
-    const tag = Number(varint());
+    const rawTag = varint();
+    if (rawTag > 0xffffffffn) throw new Error('Invalid CRX protobuf: field tag overflow');
+    const tag = Number(rawTag);
     const field = tag >>> 3, wire = tag & 7;
+    if (field === 0) throw new Error('Invalid CRX protobuf: field number zero');
     if (wire === 0) out.push({ field, wire, value: varint() });
     else if (wire === 2) {
-      const len = Number(varint());
+      const rawLength = varint();
+      if (rawLength > BigInt(buf.length - i)) throw new Error('Invalid CRX protobuf: truncated field');
+      const len = Number(rawLength);
       out.push({ field, wire, value: buf.subarray(i, i + len) });
       i += len;
-    } else if (wire === 5) { i += 4; } else if (wire === 1) { i += 8; } else break;
+    } else if (wire === 5 || wire === 1) {
+      const len = wire === 5 ? 4 : 8;
+      requireBytes(len);
+      out.push({ field, wire, value: buf.subarray(i, i + len) });
+      i += len;
+    } else throw new Error(`Invalid CRX protobuf: unsupported wire type ${wire}`);
   }
   return out;
+}
+
+function messageBytes(field) {
+  if (field.wire !== 2) throw new Error(`Invalid CRX protobuf: field ${field.field} must contain bytes`);
+  return field.value;
 }
 
 /** Splits a CRX2/CRX3 buffer into { zip, publicKey, id }. */
@@ -56,26 +76,36 @@ export function parseCrx(buf) {
     if (buf.subarray(0, 2).toString() === 'PK') return { zip: buf, publicKey: null, id: null };
     throw new Error('Not a CRX file');
   }
+  if (buf.length < 8) throw new Error('Invalid CRX: truncated version header');
   const version = buf.readUInt32LE(4);
   if (version === 2) {
+    if (buf.length < 16) throw new Error('Invalid CRX2: truncated header');
     const keyLen = buf.readUInt32LE(8), sigLen = buf.readUInt32LE(12);
+    if (keyLen + sigLen > buf.length - 16) throw new Error('Invalid CRX2: truncated key or signature');
     const publicKey = buf.subarray(16, 16 + keyLen);
     return { zip: buf.subarray(16 + keyLen + sigLen), publicKey, id: idFromPublicKey(publicKey) };
   }
   if (version !== 3) throw new Error(`Unsupported CRX version ${version}`);
+  if (buf.length < 12) throw new Error('Invalid CRX3: truncated header');
   const headerLen = buf.readUInt32LE(8);
+  if (headerLen > buf.length - 12) throw new Error('Invalid CRX3: truncated protobuf header');
   const header = readProto(buf.subarray(12, 12 + headerLen));
   const zip = buf.subarray(12 + headerLen);
   let crxId = null;
   const signed = header.find((f) => f.field === 10000);
   if (signed) {
-    const sd = readProto(signed.value).find((f) => f.field === 1);
-    if (sd) crxId = [...sd.value].map((b) => (b >> 4).toString(16) + (b & 15).toString(16)).join('')
-      .split('').map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
+    const sd = readProto(messageBytes(signed)).find((f) => f.field === 1);
+    if (sd) {
+      const bytes = messageBytes(sd);
+      if (bytes.length !== 16) throw new Error('Invalid CRX3: crx_id must contain 16 bytes');
+      crxId = [...bytes].map((b) => (b >> 4).toString(16) + (b & 15).toString(16)).join('')
+        .split('').map((c) => String.fromCharCode(97 + parseInt(c, 16))).join('');
+    }
   }
   // RSA (2) and ECDSA (3) proofs; the developer key is the one matching crx_id.
   const keys = header.filter((f) => f.field === 2 || f.field === 3)
-    .map((f) => readProto(f.value).find((p) => p.field === 1)?.value).filter(Boolean);
+    .map((f) => readProto(messageBytes(f)).find((p) => p.field === 1))
+    .filter(Boolean).map(messageBytes);
   const publicKey = keys.find((k) => idFromPublicKey(k) === crxId) || keys[0] || null;
   return { zip, publicKey, id: publicKey ? idFromPublicKey(publicKey) : crxId };
 }
