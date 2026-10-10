@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0-windows.1
+
+- First Windows x64 portable preview with bundled Node and Chromium, per-user installation, MCP configuration generation and manual updates.
+- Windows DPAPI CurrentUser protects stored secrets; macOS continues to use Keychain.
+- Native Windows package smoke checks and a Linux/macOS/Windows regression matrix.
+- Windows-aware password selection shortcuts and extension source paths.
+
 ## 0.2.2
 
 - Updates happen inside the browser: Marlin checks quietly after you open it, the sidebar shows when a new version is out, and the About page shows release notes, an Install and restart button and download progress. Sparkle still downloads, verifies the signature and installs.

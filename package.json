@@ -1,6 +1,6 @@
 {
   "name": "marlin",
-  "version": "0.2.2",
+  "version": "0.3.0-windows.1",
   "private": true,
   "description": "Chromium browser built for AI agents: extensions, wallets, screenshots, MCP.",
   "type": "module",
@@ -15,7 +15,8 @@
     "test": "node test/e2e.js",
     "release": "bash scripts/release.sh",
     "bench:memory": "node test/memory-bench.js",
-    "test:unit": "node scripts/test-unit.js"
+    "test:unit": "node scripts/test-unit.js",
+    "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

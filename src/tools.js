@@ -7,6 +7,7 @@ import { paths } from './paths.js';
 import { snapshotInPage, locateRef, focusRef, selectRef, annotateRefs } from './snapshot.js';
 import { listSecrets, revealSecret, redact } from './vault.js';
 import { settle, sleep } from './browser.js';
+import { selectAll } from './keyboard.js';
 
 // Helper scripts run in an isolated world: same DOM, but immune to page side
 // lockdowns such as MetaMask's LavaMoat scuttling of window globals.
@@ -381,7 +382,7 @@ export function buildTools(mb, hooks = {}) {
     if (!field) return { text: `No password field on ${ext.name} (it may already be unlocked or still onboarding)\n\n${await snapshotText(page)}` };
     const submit = async (f) => {
       await f.click();
-      await page.keyboard.down('Meta'); await page.keyboard.press('KeyA'); await page.keyboard.up('Meta');
+      await selectAll(page.keyboard);
       await page.keyboard.type(value, { delay: 8 });
       await act(page, () => page.keyboard.press('Enter'));
       await sleep(1500);

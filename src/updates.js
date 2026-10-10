@@ -13,7 +13,9 @@ export const canUpdate = () => existsSync(helperPath);
 export function runUpdater(mode, onEvent = () => {}) {
   return new Promise((resolve) => {
     if (!canUpdate()) {
-      const e = { event: 'error', message: 'This is a development build. Update it with git pull and install.sh.' };
+      const e = { event: 'error', message: process.platform === 'win32'
+        ? 'Windows updates are manual. Download a Windows package from https://github.com/joymadhu49/marlin/releases.'
+        : 'This is a development build. Update it with git pull and install.sh.' };
       onEvent(e);
       return resolve(e);
     }

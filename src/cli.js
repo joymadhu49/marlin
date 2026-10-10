@@ -91,7 +91,7 @@ async function main() {
       else if (sub === 'set' && name) {
         const value = process.env.MARLIN_SECRET_VALUE || await askHidden(`Value for "${name}": `);
         await vault.setSecret(name, value);
-        console.log(`Saved "${name}" to the Keychain. Restart Marlin or it is picked up on first use.`);
+        console.log(`Saved "${name}" to the protected secret store. Restart Marlin or it is picked up on first use.`);
       } else console.log('Usage: marlin secret set <name> | list | rm <name>');
       return;
     }
