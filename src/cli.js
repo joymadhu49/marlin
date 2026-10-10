@@ -18,7 +18,7 @@ const HELP = `marlin, a Chromium browser built for AI agents
   marlin tool <name> [json]       run one tool, e.g. marlin tool navigate '{"url":"example.com"}'
   marlin install <id|url|path>    install an extension (Chrome Web Store id/URL or local folder/.crx)
   marlin extensions
-  marlin secret set <name>        store a secret (wallet password) in the macOS Keychain
+  marlin secret set <name>        store a secret (wallet password) in the OS-protected store
   marlin secret list | rm <name>
   marlin config [key] [value]     e.g. marlin config signPolicy allow
   marlin setup                    connect Claude Code, Codex and Hermes (MCP + skill)
@@ -107,6 +107,11 @@ async function main() {
       return;
     }
     case 'setup': {
+      if (process.platform === 'win32') {
+        const { setupWindows } = await import('./setup-windows.js');
+        setupWindows();
+        return;
+      }
       // Wire Marlin into Claude Code, Codex and Hermes (MCP + skill).
       const { spawnSync } = await import('node:child_process');
       const { join } = await import('node:path');
@@ -118,6 +123,11 @@ async function main() {
       const { daemonUp } = await import('./client.js');
       const { runUpdater, canUpdate } = await import('./updates.js');
       if (!canUpdate()) {
+        if (process.platform === 'win32') {
+          console.log('Windows updates are manual. Download the Windows package from https://github.com/joymadhu49/marlin/releases and extract it to a new directory.');
+          console.log('Stop Marlin before switching versions. Your profile and protected secrets stay in the Marlin data directory.');
+          return;
+        }
         console.log('This copy is a dev checkout. Update with: git pull && bash install.sh');
         console.log('Or install the release: curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-marlin.sh | bash');
         return;
