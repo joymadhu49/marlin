@@ -236,7 +236,7 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     signal.throwIfAborted();
     emit({ event: 'installing' });
     child = spawnImpl('powershell.exe', args, {
-      detached: true, windowsHide: true, stdio: 'ignore', cwd: workspace,
+      detached: true, windowsHide: true, stdio: 'ignore', cwd: dirname(install),
       env: { ...process.env, MARLIN_HOME: home },
     });
     let failure;

@@ -239,7 +239,8 @@ test('verified package hands off only after matching helper readiness acknowledg
   const get = (flag) => f.state.args[f.state.args.indexOf(flag) + 1];
   assert.equal(get('-BrowserPid'), '98765');
   assert.equal(dirname(get('-StagedDir')), realpathSync(f.parent));
-  assert.equal(dirname(get('-File')), f.state.spawnOptions.cwd);
+  assert.equal(dirname(dirname(get('-File'))), f.state.spawnOptions.cwd);
+  assert.equal(f.state.spawnOptions.cwd, realpathSync(f.parent));
   assert.equal(JSON.parse(await readFile(get('-LockPath'), 'utf8')).pid, 123456);
   assert.ok(f.state.events.find((e) => e.event === 'progress' && e.percent === 100));
   assert.deepEqual(f.state.events.slice(-2).map((e) => e.event), ['installing', 'restarting']);
