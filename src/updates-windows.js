@@ -119,7 +119,13 @@ function ownerAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (error) { return error.code !== 'ESRCH'; }
 }
 async function acquireLock(file, token) {
+  const recoveryFile = `${file}.recovery`;
+  const recoveryError = () => new Error(`Update lock recovery is already active or was interrupted: ${recoveryFile}. Close other updaters before removing it, then retry.`);
   for (let attempt = 0; attempt < 3; attempt++) {
+    // Never bypass a recovery marker left by a crashed reclaimer, even when
+    // that process already removed the stale main lock.
+    try { lstatSync(recoveryFile); throw recoveryError(); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
     let handle;
     try { handle = await open(file, 'wx', 0o600); }
     catch (error) {
@@ -130,8 +136,23 @@ async function acquireLock(file, token) {
       let owner;
       try { owner = JSON.parse(content); } catch { throw new Error(`An update lock is incomplete: ${file}. Close other updaters before removing it.`); }
       if (ownerAlive(owner.pid)) throw new Error('Another Windows update is already running.');
-      // Recheck ownership before recovering a dead updater's lock.
-      if (await readFile(file, 'utf8').catch(() => null) === content) await rm(file, { force: true });
+      let recovery;
+      try { recovery = await open(recoveryFile, 'wx', 0o600); }
+      catch (error) { if (error.code === 'EEXIST') throw recoveryError(); throw error; }
+      try {
+        // Serialize the re-read and unlink: a second stale reclaimer must not
+        // remove a replacement lock acquired by a new, live updater.
+        let latest;
+        try { latest = await readFile(file, 'utf8'); }
+        catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        try { owner = JSON.parse(latest); }
+        catch { throw new Error(`An update lock is incomplete: ${file}. Close other updaters before removing it.`); }
+        if (ownerAlive(owner.pid)) throw new Error('Another Windows update is already running.');
+        await rm(file, { force: true });
+      } finally {
+        await recovery.close();
+        await rm(recoveryFile, { force: true });
+      }
       continue;
     }
     try { await handle.writeFile(JSON.stringify({ pid: process.pid, token })); }

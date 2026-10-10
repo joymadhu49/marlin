@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
+import * as realFs from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mock, test } from 'node:test';
 
 mock.module('../src/paths.js', { namedExports: { ROOT: '/unused-root', paths: { home: '/unused-home' } } });
+let beforeRemove;
+mock.module('node:fs/promises', { namedExports: {
+  ...realFs,
+  rm: async (...args) => { await beforeRemove?.(...args); return realFs.rm(...args); },
+} });
 const { canUpdateWindows, runWindowsUpdater } = await import('../src/updates-windows.js');
 const current = '0.3.0-windows.1', newer = '0.3.0-windows.2';
 const payload = Buffer.from('fixture archive contents');
@@ -211,6 +217,63 @@ test('live update lock excludes concurrent updaters', async (t) => {
   assert.match((await f.run()).message, /already running/);
   assert.equal(await readFile(f.lockPath, 'utf8'), owner);
   assert.equal(f.state.requested.length, 0);
+});
+
+test('concurrent stale-lock recovery admits only one updater while its fetch is held', { timeout: 5000 }, async (t) => {
+  const f = await fixture(t);
+  await writeFile(f.lockPath, JSON.stringify({ pid: 2147483647, token: 'dead' }));
+  let releaseFetch, firstFetch, secondDelete, duplicateFetch;
+  const gate = new Promise((resolve) => { releaseFetch = resolve; });
+  const entered = new Promise((resolve) => { firstFetch = resolve; });
+  const deleting = new Promise((resolve) => { secondDelete = resolve; });
+  const duplicate = new Promise((resolve) => { duplicateFetch = resolve; });
+  let requests = 0, deletions = 0;
+  f.options.fetchImpl = async () => {
+    requests++;
+    firstFetch();
+    if (requests > 1) duplicateFetch();
+    await gate;
+    return Response.json([]);
+  };
+  beforeRemove = async (file) => {
+    if (file !== f.lockPath) return;
+    if (++deletions === 1) {
+      // Let an unprotected second reclaimer finish its stale ownership check.
+      await Promise.race([deleting, new Promise((resolve) => setTimeout(resolve, 100))]);
+    } else if (deletions === 2) {
+      secondDelete();
+      // Delay its unlink until the first updater owns a new live lock.
+      await entered;
+    }
+  };
+  const runs = [f.run(), f.run()];
+  try {
+    await entered;
+    await Promise.race([...runs, duplicate]);
+    assert.equal(requests, 1, 'a second updater entered the protected release check');
+    assert.equal(JSON.parse(await readFile(f.lockPath, 'utf8')).pid, process.pid);
+  } finally {
+    beforeRemove = undefined;
+    releaseFetch();
+    await Promise.all(runs);
+  }
+  assert.equal(existsSync(f.lockPath), false);
+  assert.equal(existsSync(`${f.lockPath}.recovery`), false);
+});
+
+test('an abandoned recovery mutex fails closed with removal instructions', async (t) => {
+  const f = await fixture(t);
+  const recovery = `${f.lockPath}.recovery`;
+  await writeFile(recovery, 'interrupted recovery');
+  assert.match((await f.run()).message, /recovery.*Close other updaters.*removing/i);
+  assert.equal(await readFile(recovery, 'utf8'), 'interrupted recovery');
+  assert.equal(existsSync(f.lockPath), false);
+  assert.equal(f.state.requested.length, 0);
+  const owner = JSON.stringify({ pid: process.pid, token: 'existing' });
+  await writeFile(f.lockPath, owner);
+  assert.match((await f.run()).message, /recovery/i);
+  assert.equal(await readFile(f.lockPath, 'utf8'), owner);
+  assert.equal(await readFile(recovery, 'utf8'), 'interrupted recovery');
 });
 
 test('already-cancelled update does not download or shut down', async (t) => {
