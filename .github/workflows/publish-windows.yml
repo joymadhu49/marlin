@@ -1,13 +1,24 @@
-name: Publish tested Windows preview
+name: Publish tested Windows release
 on:
-  push:
-    branches: [release/windows-publish]
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Windows package workflow run ID
+        required: true
+        type: string
+      source_sha:
+        description: Exact tested source commit (40 characters)
+        required: true
+        type: string
+      tag:
+        description: Windows release tag (vX.Y.Z-windows.N)
+        required: true
+        type: string
 permissions:
   contents: write
   actions: read
 concurrency:
-  group: publish-windows-preview
+  group: publish-windows-release
   cancel-in-progress: false
 jobs:
   publish:
@@ -21,7 +32,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.22.3'
-      # Promotion is deliberately pinned. Change these together only after a
-      # new Windows package run has completed successfully for that commit.
       - name: Verify and publish the already tested artifact
-        run: node scripts/publish-windows.js 38051567154 dce7aef7bb07505b4a91e5d7dab6d5f2e49aebdd v0.3.0-windows.1
+        env:
+          WINDOWS_RUN_ID: ${{ inputs.run_id }}
+          WINDOWS_SOURCE_SHA: ${{ inputs.source_sha }}
+          WINDOWS_TAG: ${{ inputs.tag }}
+        run: node scripts/publish-windows.js "$WINDOWS_RUN_ID" "$WINDOWS_SOURCE_SHA" "$WINDOWS_TAG"

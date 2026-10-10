@@ -124,8 +124,8 @@ async function main() {
       const { runUpdater, canUpdate } = await import('./updates.js');
       if (!canUpdate()) {
         if (process.platform === 'win32') {
-          console.log('Windows updates are manual. Download the Windows package from https://github.com/joymadhu49/marlin/releases and extract it to a new directory.');
-          console.log('Stop Marlin before switching versions. Your profile and protected secrets stay in the Marlin data directory.');
+          console.log('In-browser Windows updates require the packaged x64 release and its bundled runtime. Start it with marlin.cmd.');
+          console.log('Download the Windows release from https://github.com/joymadhu49/marlin/releases. Development checkouts update with git pull.');
           return;
         }
         console.log('This copy is a dev checkout. Update with: git pull && bash install.sh');
@@ -148,7 +148,8 @@ async function main() {
         console.log('Installing in Marlin. It will close and reopen when ready.');
         return;
       }
-      await runUpdater(install ? 'install' : 'check', show);
+      const result = await runUpdater(install ? 'install' : 'check', show);
+      if (result?.event === 'error') process.exitCode = 1;
       return;
     }
     case 'version': {

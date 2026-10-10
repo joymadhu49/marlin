@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0-windows.2
+
+- Windows checks for new releases inside Marlin and installs them through the About page or sidebar, with download progress and restart.
+- Verify release package checksums before staging; preserve external browser data and roll back a failed installation replacement.
+- Serialize updater requests and keep macOS Sparkle updates on their existing release feed.
+- Document Android port requirements and distribution constraints.
+
 ## 0.3.0-windows.1
 
 - First Windows x64 portable preview with bundled Node and Chromium, per-user installation, MCP configuration generation and manual updates.

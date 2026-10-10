@@ -6,7 +6,7 @@ A Chromium browser built for AI agents. Claude Code, Codex, Hermes, Cursor or an
 
 **macOS:** download the DMG from [Releases](https://github.com/joymadhu49/marlin/releases/latest), open it and drag Marlin to Applications. It is signed and notarized, and updates itself through [Sparkle](https://sparkle-project.org).
 
-**Windows x64 preview:** download the ZIP and `.sha256` sidecar from the [Windows preview release](https://github.com/joymadhu49/marlin/releases/tag/v0.3.0-windows.1). Compare `Get-FileHash <zip> -Algorithm SHA256` with the sidecar, extract the ZIP, and double-click `marlin.cmd` inside `Marlin-win32-x64`. Node and Chromium are included. This preview is unsigned, uses the Chromium window branding, and has manual updates.
+**Windows x64:** download the ZIP and `.sha256` sidecar from the [Windows release](https://github.com/joymadhu49/marlin/releases/tag/v0.3.0-windows.2). Compare `Get-FileHash <zip> -Algorithm SHA256` with the sidecar, extract the ZIP, and double-click `marlin.cmd` inside `Marlin-win32-x64`. Node and Chromium are included. This release is unsigned and uses the Chromium window branding. Marlin checks for updates after opening; use **Install and restart** on its About page or **Install** in the sidebar to update without downloading another ZIP. Users of the original `0.3.0-windows.1` preview must install this version once to gain the updater.
 
 Optional Windows installation (PowerShell, from the extracted folder):
 
@@ -105,6 +105,10 @@ The script builds the app, Developer ID signs it with the hardened runtime, nota
 
 Dev builds: `bash app/build-app.sh --install` (ad hoc signed, no updater feed changes).
 
+Windows uses a separate GitHub release channel (`vX.Y.Z-windows.N`) and the bundled runtime. Its updater verifies the ZIP against its SHA256 sidecar and GitHub asset digest before replacing the app. This provides transport and integrity checks, not publisher code signing. The profile and DPAPI secrets remain in the data directory. Keep `MARLIN_HOME` outside the installation folder and close MCP clients before restarting to release their bundled Node runtime. The installer retains the prior app if replacement fails. See [Windows release procedure](docs/windows-release.md).
+
+Android requires a separate app and browser-engine integration; see [Android port assessment](docs/android-port.md). There is no Android package yet.
+
 ## Tests
 
 The server regression tests run without Chromium or Keychain access and were verified on Node 22.22.3. The script enables Node's experimental module mocking support.
@@ -145,7 +149,7 @@ Previously verified by hand on macOS through the tools: MetaMask onboarding with
 
 ## Limits
 
-- Stable signed builds target macOS 13+ on Apple Silicon. Windows x64 is an unsigned portable preview with manual updates. Windows ARM64 and Linux packages are not provided.
+- Stable signed builds target macOS 13+ on Apple Silicon. Windows x64 is an unsigned portable release with in-browser updates. Windows ARM64 and Linux packages are not provided.
 - This is the official Chromium binary plus a control layer, not a source fork. Building Chromium from source needs roughly 100 GB free and several hours. Nothing so far has needed a patched browser.
 - Side panels and toolbar popups close when they lose focus. `open_extension` with `mode: "tab"` is steadier for long flows.
 - The approval guard matches button labels. It is a seatbelt, not a sandbox. Use dedicated agent wallets.

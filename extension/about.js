@@ -1,5 +1,5 @@
 // About page. Chromium's own "About" page has no updater behind it, so Marlin
-// sends chrome://settings/help here. Sparkle does the work; this page shows it.
+// sends chrome://settings/help here. The platform updater does the work.
 const $ = (s) => document.querySelector(s);
 const ws = new WebSocket(`ws://127.0.0.1:${self.MARLIN.port}/ws?token=${self.MARLIN.token}`);
 const mb = (n) => `${Math.round(n / 1048576)} MB`;
@@ -13,7 +13,7 @@ function render(u) {
   if (u.version) {
     $('#updTitle').textContent = `Marlin ${u.version} is available`;
     $('#updSize').textContent = u.size ? mb(u.size) : '';
-    // Release notes come from our own signed appcast; render them as text lists only.
+    // Release notes are untrusted content; render them as text only.
     const doc = new DOMParser().parseFromString(u.notes || '', 'text/html');
     const items = [...doc.querySelectorAll('li')].map((li) => li.textContent.trim()).filter(Boolean);
     const sub = doc.querySelector('p')?.textContent || '';
@@ -24,6 +24,9 @@ function render(u) {
       const ul = document.createElement('ul');
       for (const t of items) ul.append(Object.assign(document.createElement('li'), { textContent: t }));
       notes.append(ul);
+    }
+    if (!sub && !items.length && u.notes) {
+      notes.append(Object.assign(document.createElement('p'), { textContent: u.notes }));
     }
   }
   const showBar = ['downloading', 'progress', 'extracting', 'installing', 'restarting'].includes(u.event);

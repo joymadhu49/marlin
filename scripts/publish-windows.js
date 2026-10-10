@@ -16,6 +16,10 @@ const run = JSON.parse(gh(['api', `repos/${repo}/actions/runs/${runId}`]));
 if (run.conclusion !== 'success' || run.head_sha !== source || run.path !== '.github/workflows/windows.yml') {
   throw new Error('Artifact source must match a successful Windows package workflow exactly');
 }
+const regressions = JSON.parse(gh(['api', `repos/${repo}/actions/workflows/tests.yml/runs?head_sha=${source}&status=success&per_page=20`]));
+if (!regressions.workflow_runs?.some(r => r.head_sha === source && r.conclusion === 'success')) {
+  throw new Error('The Linux/macOS/Windows regression matrix must also pass for this exact source');
+}
 const artifacts = JSON.parse(gh(['api', `repos/${repo}/actions/runs/${runId}/artifacts`])).artifacts;
 if (!artifacts.some(a => a.name === 'marlin-windows-x64' && !a.expired)) throw new Error('Tested package artifact is unavailable');
 const dir = mkdtempSync(join(tmpdir(), 'marlin-publish-'));
@@ -36,8 +40,8 @@ try {
   if (`v${metadata.version}` !== tag) throw new Error('Bundled version does not match release tag');
   console.log(`Verified ${name}: sha256:${actual}, source ${source}, build ${runId}`);
   console.log(gh(['release', 'create', tag, archive, `${archive}.sha256`, '--repo', repo,
-    '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${metadata.version} — Windows x64 Preview`,
-    '--notes-file', 'docs/windows-preview-release.md']));
+    '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${metadata.version} — Windows x64`,
+    '--notes-file', 'docs/windows-release-notes.md']));
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

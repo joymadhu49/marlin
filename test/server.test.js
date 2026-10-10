@@ -13,6 +13,7 @@ let home, daemon, port, token, previousHome;
 const originalListeners = new Map();
 const clients = new Set();
 const builtinId = 'test-extension';
+let updater = async () => {};
 
 before(async () => {
   previousHome = process.env.MARLIN_HOME;
@@ -43,7 +44,7 @@ before(async () => {
     listSecrets: () => [], setSecret: async () => {}, removeSecret: async () => {}, warmSecrets: async () => {},
   } });
   mock.module('../src/updates.js', { namedExports: {
-    canUpdate: () => false, runUpdater: async () => {},
+    canUpdate: () => false, runUpdater: (...args) => updater(...args),
   } });
   const { startDaemon } = await import('../src/server.js');
   daemon = await startDaemon({ headless: true });
@@ -126,6 +127,31 @@ test('tools require authorization and authenticated requests still route', async
   const result = await request('/tools/echo', { method: 'POST', headers, body: { message: 'hello' } });
   assert.equal(result.status, 200);
   assert.deepEqual(JSON.parse(result.body.text), { message: 'hello' });
+});
+
+test('concurrent update requests launch only one installer and recover after failure', async () => {
+  let rejectInstall;
+  const calls = [];
+  updater = (mode, onEvent, options) => {
+    calls.push({ mode, options });
+    return new Promise((resolve, reject) => { rejectInstall = reject; });
+  };
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const first = await request('/update', { method: 'POST', headers, body: { install: true } });
+    assert.equal(first.status, 200);
+    await request('/update', { method: 'POST', headers, body: { install: true } });
+    await request('/update', { method: 'POST', headers, body: {} });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].mode, 'install');
+    assert.equal(typeof calls[0].options.shutdown, 'function');
+    rejectInstall(new Error('Network unavailable'));
+    await new Promise(resolve => setImmediate(resolve));
+    updater = async (mode, onEvent) => onEvent({ event: 'none' });
+    const next = await request('/update', { method: 'POST', headers, body: {} });
+    assert.equal(next.body.event, 'none');
+    await assertHealthy();
+  } finally { updater = async () => {}; }
 });
 
 function upgrade(path, { origin = `chrome-extension://${builtinId}`, host = '127.0.0.1:0' } = {}) {
