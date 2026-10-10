@@ -220,9 +220,24 @@ export function buildTools(mb, hooks = {}) {
     const parts = key.split('+');
     const main = parts.pop();
     await act(page, async () => {
-      for (const m of parts) await page.keyboard.down(normKey(m));
-      await page.keyboard.press(normKey(main));
-      for (const m of parts.reverse()) await page.keyboard.up(normKey(m));
+      const held = [];
+      let failure;
+      try {
+        for (const m of parts) {
+          const modifier = normKey(m);
+          await page.keyboard.down(modifier);
+          held.push(modifier);
+        }
+        await page.keyboard.press(normKey(main));
+      } catch (error) {
+        failure = error;
+      } finally {
+        for (const modifier of held.reverse()) {
+          try { await page.keyboard.up(modifier); }
+          catch (error) { failure ??= error; }
+        }
+      }
+      if (failure) throw failure;
     });
     return { text: `Pressed ${key}\n\n${await snapshotText(page).catch(() => '(page closed)')}` };
   });
