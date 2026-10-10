@@ -138,6 +138,7 @@ export function focusRef(ref, clear) {
 export function selectRef(ref, value) {
   const el = window.__marlinRefs && window.__marlinRefs.get(ref);
   if (!el || el.tagName !== 'SELECT') return { error: 'Ref is not a <select>' };
+  if (!el.isConnected) return { error: `Ref ${ref} is stale (the page changed). Take a new snapshot.` };
   const opt = [...el.options].find((o) => o.value === value || o.text.trim() === value) ||
     [...el.options].find((o) => o.text.toLowerCase().includes(String(value).toLowerCase()));
   if (!opt) return { error: `No option matching "${value}"` };
