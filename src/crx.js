@@ -2,10 +2,10 @@
 // with its public key injected into manifest.json so the unpacked copy keeps
 // the exact same extension ID as the store version.
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, readFile, rm, mkdir, rename, cp } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, mkdir, rename, cp, realpath } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, isAbsolute, sep } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -137,7 +137,44 @@ export async function installFromPath(path, extRoot) {
   const manifest = JSON.parse(await readFile(join(path, 'manifest.json'), 'utf8'));
   const id = manifest.key ? idFromPublicKey(Buffer.from(manifest.key, 'base64')) : `local-${createHash('sha1').update(path).digest('hex').slice(0, 12)}`;
   const dest = join(extRoot, id);
-  await rm(dest, { recursive: true, force: true });
-  await cp(path, dest, { recursive: true });
+  await mkdir(extRoot, { recursive: true });
+  const source = await realpath(path);
+  const target = await realpath(dest).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+    return realpath(extRoot).then((root) => join(root, id));
+  });
+  if (source === target) return { id, dir: dest, manifest };
+  const contains = (parent, child) => {
+    const rel = relative(parent, child);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  };
+  if (contains(source, target) || contains(target, source)) {
+    throw new Error('Cannot install overlapping source and destination directories');
+  }
+
+  // Finish copying before touching an existing installation. Keep its backup
+  // on the same filesystem so a failed replacement can be rolled back.
+  const staging = await mkdtemp(join(extRoot, '.marlin-install-'));
+  const replacement = join(staging, 'replacement');
+  const backup = join(staging, 'previous');
+  let backedUp = false, preserveBackup = false;
+  try {
+    await cp(source, replacement, { recursive: true });
+    try { await rename(dest, backup); backedUp = true; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try { await rename(replacement, dest); }
+    catch (error) {
+      if (backedUp) {
+        try { await rename(backup, dest); }
+        catch (restoreError) {
+          preserveBackup = true;
+          throw new Error(`Installation failed; previous files remain at ${backup}`, { cause: restoreError });
+        }
+      }
+      throw error;
+    }
+  } finally {
+    if (!preserveBackup) await rm(staging, { recursive: true, force: true });
+  }
   return { id, dir: dest, manifest };
 }
