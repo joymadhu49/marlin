@@ -4,9 +4,21 @@ A Chromium browser built for AI agents. Claude Code, Codex, Hermes, Cursor or an
 
 ## Install
 
-**Humans:** download the DMG from [Releases](https://github.com/joymadhu49/marlin/releases/latest), open it and drag Marlin to Applications. It is signed and notarized, and updates itself through [Sparkle](https://sparkle-project.org).
+**macOS:** download the DMG from [Releases](https://github.com/joymadhu49/marlin/releases/latest), open it and drag Marlin to Applications. It is signed and notarized, and updates itself through [Sparkle](https://sparkle-project.org).
 
-**Agents, or a one liner:**
+**Windows x64 preview:** download the ZIP and `.sha256` sidecar from the [Windows preview release](https://github.com/joymadhu49/marlin/releases/tag/v0.3.0-windows.1). Compare `Get-FileHash <zip> -Algorithm SHA256` with the sidecar, extract the ZIP, and double-click `marlin.cmd` inside `Marlin-win32-x64`. Node and Chromium are included. This preview is unsigned, uses the Chromium window branding, and has manual updates.
+
+Optional Windows installation (PowerShell, from the extracted folder):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+This installs for the current user under `%LOCALAPPDATA%\Programs\Marlin`, adds the command to the user PATH and creates a desktop shortcut. Open a new terminal afterward. The installer refuses to overwrite an existing installation; stop Marlin and use a new directory when upgrading. Browser data lives separately under `%LOCALAPPDATA%\Marlin`. `MARLIN_HOME` overrides the data directory on either OS.
+
+Run `marlin setup` on Windows to generate `mcp-config.json` in the data directory. Copy its `marlin` entry into your MCP client's configuration and restart the client. The Windows launcher uses the bundled runtime; no global Node installation is needed. Passwords use Windows DPAPI CurrentUser and can only be decrypted in the same Windows user context. Moving the encrypted files to another account or computer is not a secret-backup strategy.
+
+**macOS agents, or a one liner:**
 
 ```
 curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-marlin.sh | bash
@@ -30,11 +42,11 @@ Normal agent browsers break on extensions. Branded Chrome no longer loads unpack
 
 | Problem | Marlin |
 |---|---|
-| Installing store extensions | Downloads the CRX, verifies it, unpacks it with its public key so it keeps the real store ID, loads it over CDP `Extensions.loadUnpacked` |
+| Installing store extensions | Downloads the CRX, validates its structure, unpacks it with its public key so it keeps the real store ID, loads it over CDP `Extensions.loadUnpacked` |
 | Opening the toolbar popup | `Extensions.triggerAction` opens the real popup. When a wallet closes its popup and reopens as a tab, Marlin follows it |
 | Driving wallet UIs | Helper scripts run in an isolated world, so LavaMoat scuttling (MetaMask) does not break them |
 | Wallet requests in existing windows | Watches extension route changes (`/connect`, `/confirm-transaction`) and surfaces them as events and as the active tab |
-| Passwords | macOS Keychain. Agents can type a secret into a field but no tool returns its value, and all output is scrubbed |
+| Passwords | macOS Keychain or Windows DPAPI CurrentUser. Agents can type a secret into a field but no tool returns its value, and text output is scrubbed |
 | Signing | Wallet Confirm/Sign/Send/Approve clicks pause for a human (sidebar card or approval tab plus a notification) with a screenshot. `marlin config signPolicy allow` turns this off |
 
 ## Pieces
@@ -58,12 +70,12 @@ marlin stop | status | version
 marlin update                  check for a new release
 marlin setup                   reconnect Claude Code, Codex and Hermes
 marlin install <id|url|path>   install an extension
-marlin secret set <name>       store a wallet password in the Keychain
+marlin secret set <name>       store a wallet password in the OS-protected store
 marlin config signPolicy smart|ask|allow
 marlin tools | tool <name> '<json>'
 ```
 
-Data: `~/Library/Application Support/Marlin` (profile, extensions, screenshots, config, log).
+Data: `~/Library/Application Support/Marlin` on macOS; `%LOCALAPPDATA%\Marlin` on Windows (profile, extensions, screenshots, config, log). Windows approval cards and tabs are supported; native desktop approval notifications are currently macOS-only.
 
 ## Memory
 
@@ -95,16 +107,45 @@ Dev builds: `bash app/build-app.sh --install` (ad hoc signed, no updater feed ch
 
 ## Tests
 
+The server regression tests run without Chromium or Keychain access and were verified on Node 22.22.3. The script enables Node's experimental module mocking support.
+
+```
+npm run test:server
+```
+
+Run all browser-independent regressions:
+
+```
+npm run test:unit       # browser-independent regressions; Node 22.22.3
+```
+
+GitHub Actions runs the unit suite on Linux, macOS and Windows. Native Windows DPAPI checks run only on Windows. Linux CI coverage does not imply a supported Linux browser distribution.
+
+The Windows package workflow builds with pinned Node and Chromium versions and then runs `node test/windows-smoke.js` against the bundled runtime and browser. It covers CLI/setup, launcher and installer paths, MCP discovery, local HTTP navigation, element refs, screenshots, CDP and a local extension. It does not certify live wallet onboarding, signing, or transactions on Windows.
+
+To build a Windows package from source on Windows x64:
+
+```powershell
+npm install --global pnpm@10.28.2
+pnpm install --frozen-lockfile
+node src/cli.js fetch-chromium
+npm run build:windows
+$env:MARLIN_APP_ROOT = Join-Path $PWD 'dist\Marlin-win32-x64'
+node test/windows-smoke.js
+```
+
+The following older end-to-end checks require Chromium and the macOS Keychain:
+
 ```
 node test/e2e.js        # 15 checks on a throwaway profile, headless
 node test/mcp-smoke.js  # spawns the MCP server like a client would
 ```
 
-Also verified by hand through the tools: MetaMask onboarding with a Keychain password, lock and unlock after restart, dapp `eth_requestAccounts` approval, and `personal_sign` through the approval guard, which returned a valid signature. Codex and Claude Code sessions each installed and drove Rabby over MCP.
+Previously verified by hand on macOS through the tools: MetaMask onboarding with a Keychain password, lock and unlock after restart, dapp `eth_requestAccounts` approval, and `personal_sign` through the approval guard, which returned a valid signature. Codex and Claude Code sessions each installed and drove Rabby over MCP.
 
 ## Limits
 
-- macOS 13+ on Apple Silicon only for now (Keychain, app bundle). The core would port to Linux and Windows.
+- Stable signed builds target macOS 13+ on Apple Silicon. Windows x64 is an unsigned portable preview with manual updates. Windows ARM64 and Linux packages are not provided.
 - This is the official Chromium binary plus a control layer, not a source fork. Building Chromium from source needs roughly 100 GB free and several hours. Nothing so far has needed a patched browser.
 - Side panels and toolbar popups close when they lose focus. `open_extension` with `mode: "tab"` is steadier for long flows.
 - The approval guard matches button labels. It is a seatbelt, not a sandbox. Use dedicated agent wallets.

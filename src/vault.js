@@ -1,24 +1,20 @@
-// Secrets live in the macOS login Keychain (service "Marlin"). Agents can ask
+// Secrets live in macOS Keychain or Windows DPAPI-protected files. Agents can ask
 // Marlin to type a secret into a field, but no tool ever returns its value,
 // and every tool output is scrubbed for known secret values as a backstop.
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { paths, readJson, writeJson } from './paths.js';
+import { createSecretBackend, validSecretName, validateSecretName } from './vault-backend.js';
 
-const run = promisify(execFile);
-const SERVICE = 'Marlin';
+const backend = createSecretBackend({ home: paths.home });
 const cache = new Map();
 
-const validName = (name) => /^[\w.\-]{1,64}$/.test(name);
-
 export function listSecrets() {
-  return readJson(paths.secrets, { names: [] }).names;
+  backend.assertSupported();
+  const names = readJson(paths.secrets, { names: [] })?.names;
+  return Array.isArray(names) ? names.filter(validSecretName) : [];
 }
 
 export async function setSecret(name, value) {
-  if (!validName(name)) throw new Error('Secret names use letters, digits, dot, dash or underscore');
-  if (!value) throw new Error('Empty secret');
-  await run('security', ['add-generic-password', '-U', '-s', SERVICE, '-a', name, '-w', value]);
+  await backend.set(name, value);
   cache.set(name, value);
   const names = new Set(listSecrets());
   names.add(name);
@@ -26,20 +22,22 @@ export async function setSecret(name, value) {
 }
 
 export async function removeSecret(name) {
-  await run('security', ['delete-generic-password', '-s', SERVICE, '-a', name]).catch(() => {});
+  await backend.remove(name);
   cache.delete(name);
   writeJson(paths.secrets, { names: listSecrets().filter((n) => n !== name) }, true);
 }
 
 /** Internal only. Never expose through a tool result. */
 export async function revealSecret(name) {
+  validateSecretName(name);
+  backend.assertSupported();
   if (cache.has(name)) return cache.get(name);
   try {
-    const { stdout } = await run('security', ['find-generic-password', '-s', SERVICE, '-a', name, '-w']);
-    const value = stdout.replace(/\n$/, '');
+    const value = await backend.get(name);
     cache.set(name, value);
     return value;
-  } catch {
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
     throw new Error(`No secret named "${name}". Known: ${listSecrets().join(', ') || 'none'}. Add one with: marlin secret set ${name}`);
   }
 }

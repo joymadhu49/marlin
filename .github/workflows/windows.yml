@@ -1,0 +1,48 @@
+name: Windows package
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows.yml'
+      - 'scripts/**'
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'install.ps1'
+      - 'marlin.cmd'
+  push:
+    branches: ['release/windows-v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      MARLIN_CHROMIUM_REVISION: '1716310'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.22.3'
+      - run: npm install --global pnpm@10.28.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: npm run test:unit
+      - name: Download pinned Chromium
+        run: node src/cli.js fetch-chromium
+      - name: Build portable Windows package
+        run: ./scripts/build-windows.ps1
+      - name: Exercise the bundled runtime and browser
+        env:
+          MARLIN_APP_ROOT: ${{ github.workspace }}\dist\Marlin-win32-x64
+        run: node test/windows-smoke.js
+      - name: Upload tested package and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: marlin-windows-x64
+          path: |
+            dist/Marlin-*-windows-x64.zip
+            dist/Marlin-*-windows-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

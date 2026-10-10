@@ -13,7 +13,9 @@ export const canUpdate = () => existsSync(helperPath);
 export function runUpdater(mode, onEvent = () => {}) {
   return new Promise((resolve) => {
     if (!canUpdate()) {
-      const e = { event: 'error', message: 'This is a development build. Update it with git pull and install.sh.' };
+      const e = { event: 'error', message: process.platform === 'win32'
+        ? 'Windows updates are manual. Download a Windows package from https://github.com/joymadhu49/marlin/releases.'
+        : 'This is a development build. Update it with git pull and install.sh.' };
       onEvent(e);
       return resolve(e);
     }
@@ -25,8 +27,17 @@ export function runUpdater(mode, onEvent = () => {}) {
     createInterface({ input: child.stdout }).on('line', (line) => {
       try { last = JSON.parse(line); onEvent(last); } catch {}
     });
-    child.on('exit', () => resolve(last));
-    child.on('error', (err) => { last = { event: 'error', message: err.message }; onEvent(last); resolve(last); });
+    // `exit` can precede the final stdout data. `close` waits for the pipes.
+    child.on('close', (code, signal) => {
+      if ((signal || code !== 0) && last.event !== 'error') {
+        last = { event: 'error', message: signal
+          ? `Update helper terminated by ${signal}.`
+          : `Update helper exited with code ${code}.` };
+        onEvent(last);
+      }
+      resolve(last);
+    });
+    child.on('error', (err) => { last = { event: 'error', message: err.message }; onEvent(last); });
     if (mode === 'install') child.unref();
   });
 }

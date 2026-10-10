@@ -7,6 +7,7 @@ import { paths } from './paths.js';
 import { snapshotInPage, locateRef, focusRef, selectRef, annotateRefs } from './snapshot.js';
 import { listSecrets, revealSecret, redact } from './vault.js';
 import { settle, sleep } from './browser.js';
+import { selectAll } from './keyboard.js';
 
 // Helper scripts run in an isolated world: same DOM, but immune to page side
 // lockdowns such as MetaMask's LavaMoat scuttling of window globals.
@@ -219,9 +220,24 @@ export function buildTools(mb, hooks = {}) {
     const parts = key.split('+');
     const main = parts.pop();
     await act(page, async () => {
-      for (const m of parts) await page.keyboard.down(normKey(m));
-      await page.keyboard.press(normKey(main));
-      for (const m of parts.reverse()) await page.keyboard.up(normKey(m));
+      const held = [];
+      let failure;
+      try {
+        for (const m of parts) {
+          const modifier = normKey(m);
+          await page.keyboard.down(modifier);
+          held.push(modifier);
+        }
+        await page.keyboard.press(normKey(main));
+      } catch (error) {
+        failure = error;
+      } finally {
+        for (const modifier of held.reverse()) {
+          try { await page.keyboard.up(modifier); }
+          catch (error) { failure ??= error; }
+        }
+      }
+      if (failure) throw failure;
     });
     return { text: `Pressed ${key}\n\n${await snapshotText(page).catch(() => '(page closed)')}` };
   });
@@ -381,7 +397,7 @@ export function buildTools(mb, hooks = {}) {
     if (!field) return { text: `No password field on ${ext.name} (it may already be unlocked or still onboarding)\n\n${await snapshotText(page)}` };
     const submit = async (f) => {
       await f.click();
-      await page.keyboard.down('Meta'); await page.keyboard.press('KeyA'); await page.keyboard.up('Meta');
+      await selectAll(page.keyboard);
       await page.keyboard.type(value, { delay: 8 });
       await act(page, () => page.keyboard.press('Enter'));
       await sleep(1500);

@@ -1,6 +1,6 @@
 ---
 name: marlin-browser
-description: Drive Marlin, the Chromium browser built for AI agents, over MCP (tools named mcp__marlin__* / mcp_marlin_*) or the `marlin` CLI. Use it for any browser task that needs extensions or wallets (MetaMask, Rabby, Phantom...), installing Chrome Web Store extensions, opening extension popups, unlocking wallets with stored secrets, connecting dapps, approving signatures, screenshots of pages or extension UIs, or when Claude in Chrome / Playwright cannot reach extension pages. Also covers installing Marlin on a Mac.
+description: Drive Marlin, the Chromium browser built for AI agents, over MCP (tools named mcp__marlin__* / mcp_marlin_*) or the `marlin` CLI. Use it for any browser task that needs extensions or wallets (MetaMask, Rabby, Phantom...), installing Chrome Web Store extensions, opening extension popups, unlocking wallets with stored secrets, connecting dapps, approving signatures, screenshots of pages or extension UIs, or when Claude in Chrome / Playwright cannot reach extension pages. Also covers installing Marlin on macOS and the Windows x64 preview.
 ---
 
 # Marlin browser
@@ -11,7 +11,7 @@ What it does that normal browser automation cannot:
 - Installs any Chrome Web Store extension by ID or URL, keeping its real store ID.
 - Opens the real toolbar popup of an extension, or its pages in a tab, and reads/clicks inside them.
 - Survives MetaMask's LavaMoat lockdown (helper scripts run in an isolated world).
-- Unlocks wallets with passwords stored in the macOS Keychain. The agent never sees the password.
+- Unlocks wallets with passwords stored in macOS Keychain or Windows DPAPI CurrentUser. The agent never sees the password.
 - Detects wallet request windows (connect, sign, send) and makes them the active tab.
 - Signs logins and plain messages on its own, and pauses transactions, approvals and typed data for a human (signPolicy "smart").
 
@@ -19,7 +19,7 @@ What it does that normal browser automation cannot:
 
 - Tools from the `marlin` MCP server present (named like `mcp__marlin__snapshot` or `mcp_marlin_snapshot` depending on the agent)? Use them.
 - No MCP? Use the CLI, same tools: `marlin tool <name> '<json args>'`, e.g. `marlin tool navigate '{"url":"example.com"}'`. Screenshots print a PNG path you can open.
-- `marlin` missing? Run `/Applications/Marlin.app/Contents/Resources/node/bin/node /Applications/Marlin.app/Contents/Resources/app/src/cli.js` instead, or install (section 8).
+- `marlin` missing? On macOS, run `/Applications/Marlin.app/Contents/Resources/node/bin/node /Applications/Marlin.app/Contents/Resources/app/src/cli.js`. On Windows, run `marlin.cmd` from the extracted package or its bundled `node\node.exe src\cli.js`. Installation is in section 8.
 - The browser starts on the first tool call (about 5 s). `marlin status` shows it. Tool listing never starts it.
 
 ## 2. The core loop
@@ -65,7 +65,7 @@ Extensions persist in Marlin's profile across restarts. Humans can also click "A
 - The human stores one with `marlin secret set metamask` (hidden prompt) or in the sidebar Settings. Never ask the human to paste a password or seed phrase into chat.
 - Unlock: `unlock_extension {extension: "MetaMask", secret: "metamask"}`. For any other password field: `fill_secret {ref, name, submit?}`.
 - Wallets lock again when Marlin restarts. Unlock at the start of a wallet task.
-- Creating a new wallet: use `fill_secret` for both password fields, so the password comes from the Keychain. Skip "reveal recovery phrase" unless the human asks.
+- Creating a new wallet: use `fill_secret` for both password fields, so the password comes from the OS-protected store. Skip "reveal recovery phrase" unless the human asks.
 
 ## 5. Dapp flows (connect, sign in, sign, send)
 
@@ -125,7 +125,9 @@ click {ref: <"Confirm">}
 
 ## 8. Install, update or repair
 
-Install or update on any Mac (no Finder windows, no prompts). This also connects Claude Code, Codex and Hermes:
+On Windows x64, download the ZIP and checksum from the Windows preview release, verify the checksum, extract it and run `marlin.cmd`. Optional `install.ps1` installs for the current user. `marlin setup` writes MCP configuration for manual import into the client. Windows updates are manual: stop Marlin and extract a new package. Data remains in `%LOCALAPPDATA%\Marlin` (or `MARLIN_HOME`); DPAPI secrets remain tied to the Windows user context. The preview is unsigned; macOS signing/notarization claims do not apply to Windows. See the repository README for exact commands. Live wallet onboarding and transactions have not been certified by the Windows smoke suite.
+
+Install or update on a supported Mac (no Finder windows, no prompts). This also connects Claude Code, Codex and Hermes:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-marlin.sh | bash
@@ -135,7 +137,7 @@ curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-
 - `marlin setup` reconnects the agents (MCP server + this skill) if a config was lost.
 - From a source checkout: `bash install.sh`.
 - New agent sessions pick up the MCP server. Hermes's Telegram gateway needs a restart.
-- Releases are signed and notarized. Source and releases: https://github.com/joymadhu49/marlin
+- macOS releases are signed and notarized. Source and releases: https://github.com/joymadhu49/marlin
 
 ## Memory
 
@@ -155,4 +157,4 @@ curl -fsSL https://raw.githubusercontent.com/joymadhu49/marlin/main/scripts/get-
 | Extension "not found" | `extensions {}`; names match case insensitively, ids always work. |
 | Wallet says locked after a restart | Expected. `unlock_extension`. |
 
-Data lives in `~/Library/Application Support/Marlin` (profile, extensions, screenshots, config). Source: `~/Projects/marlin`.
+Data lives in `~/Library/Application Support/Marlin` on macOS or `%LOCALAPPDATA%\Marlin` on Windows (profile, extensions, screenshots, config). `MARLIN_HOME` overrides either location. Source: `~/Projects/marlin`.

@@ -146,14 +146,24 @@ function handle(m) {
 // ---------- updates ----------
 function renderUpdate(u) {
   if (!u) return;
-  const show = u.version && u.event !== 'none' && u.event !== 'checking';
+  state.update = u;
+  const working = { checking: 'Checking for updates', downloading: 'Downloading', progress: `Downloading ${u.percent || 0}%`, extracting: 'Verifying', installing: 'Installing', restarting: 'Restarting Marlin' }[u.event];
+  const failed = u.event === 'error';
+  const show = failed || (u.version && u.event !== 'none' && u.event !== 'checking');
   $('#updBanner').hidden = !show;
+  $('#checkUpdate').disabled = !!working;
+  const install = $('#updInstall');
+  install.disabled = !!working;
+  install.hidden = !(failed || (u.version && u.event === 'available'));
+  install.textContent = failed ? 'Retry' : 'Install';
   if (!show) return;
-  const working = { downloading: 'Downloading', progress: `Downloading ${u.percent || 0}%`, extracting: 'Verifying', installing: 'Installing', restarting: 'Restarting Marlin' }[u.event];
-  $('#updText').textContent = working ? `Marlin ${u.version}: ${working}` : `Marlin ${u.version} is available`;
-  $('#updInstall').hidden = !!working;
+  $('#updText').textContent = failed ? (u.message || 'Update failed. Please try again.')
+    : working ? `Marlin ${u.version}: ${working}` : `Marlin ${u.version} is available`;
 }
-$('#updInstall').onclick = () => { $('#updInstall').disabled = true; send({ type: 'install_update' }); };
+$('#updInstall').onclick = () => {
+  $('#updInstall').disabled = true;
+  send({ type: state.update?.version ? 'install_update' : 'check_update' });
+};
 
 // ---------- composer ----------
 const input = $('#input');

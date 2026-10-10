@@ -1,10 +1,10 @@
-import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { dataHome, chromiumTarget } from './platform.js';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const HOME = process.env.MARLIN_HOME || join(homedir(), 'Library', 'Application Support', 'Marlin');
+export const HOME = dataHome();
 
 export const paths = {
   home: HOME,
@@ -26,11 +26,14 @@ for (const d of [paths.home, paths.profile, paths.extensions, paths.shots, paths
 }
 
 export function chromiumPath() {
+  // An explicit binary also supports development on platforms without a downloader.
+  if (process.env.MARLIN_CHROMIUM && existsSync(process.env.MARLIN_CHROMIUM)) return process.env.MARLIN_CHROMIUM;
+  const target = chromiumTarget();
   const candidates = [
     process.env.MARLIN_CHROMIUM,
     // Inside Marlin.app the rebranded Chromium binary sits next to us.
     join(ROOT, '..', '..', 'MacOS', 'Chromium'),
-    join(ROOT, 'chromium', 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(ROOT, 'chromium', ...target.executable),
   ].filter(Boolean);
   const hit = candidates.find((p) => existsSync(p));
   if (!hit) throw new Error('Chromium not found. Run: marlin fetch-chromium');

@@ -69,7 +69,9 @@ export async function startDaemon({ headless } = {}) {
   const server = http.createServer(async (req, res) => {
     const send = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (!hostOk(req.headers.host, config.port)) return send(403, { error: 'bad host' });
-    const url = new URL(req.url, 'http://127.0.0.1');
+    let url;
+    try { url = new URL(req.url, 'http://127.0.0.1'); }
+    catch { return send(400, { error: 'invalid request target' }); }
     if (url.pathname === '/health') return send(200, { ok: true, name: 'marlin', pid: process.pid, cdp: `http://127.0.0.1:${config.cdpPort}` });
     if (req.headers.authorization !== `Bearer ${token}`) return send(401, { error: 'unauthorized' });
     try {
@@ -103,7 +105,9 @@ export async function startDaemon({ headless } = {}) {
 
   const wss = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, 'http://127.0.0.1');
+    let url;
+    try { url = new URL(req.url, 'http://127.0.0.1'); }
+    catch { socket.destroy(); return; }
     const origin = req.headers.origin || '';
     const originOk = !origin || origin === `chrome-extension://${mb.builtinId}`;
     if (url.pathname !== '/ws' || url.searchParams.get('token') !== token || !originOk || !hostOk(req.headers.host, config.port)) {
@@ -141,7 +145,8 @@ export async function startDaemon({ headless } = {}) {
         switch (msg.type) {
           case 'chat':
             if (agent.busy) return reply({ type: 'error', text: 'Agent is already running' });
-            agent.run(String(msg.text || ''), msg.model || config.model);
+            await agent.run(String(msg.text || ''), msg.model || config.model)
+              .catch((error) => reply({ type: 'run_end', error: error.message }));
             break;
           case 'stop': agent.stop(); break;
           case 'reset': agent.reset(); reply({ type: 'reset_done' }); break;
