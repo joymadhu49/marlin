@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Reject malformed HTTP and WebSocket upgrade request targets without terminating the daemon.
+
 ## 0.2.2
 
 - Updates happen inside the browser: Marlin checks quietly after you open it, the sidebar shows when a new version is out, and the About page shows release notes, an Install and restart button and download progress. Sparkle still downloads, verifies the signature and installs.

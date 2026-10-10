@@ -13,6 +13,7 @@
     "fetch-chromium": "node src/cli.js fetch-chromium",
     "app": "bash app/build-app.sh",
     "test": "node test/e2e.js",
+    "test:server": "node --experimental-test-module-mocks --test test/server.test.js",
     "release": "bash scripts/release.sh",
     "bench:memory": "node test/memory-bench.js"
   },
