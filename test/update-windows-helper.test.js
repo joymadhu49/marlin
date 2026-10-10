@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,7 +12,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const helperSource = new URL('../scripts/update-windows.ps1', import.meta.url);
 
 function executable(target) {
-  try { linkSync(process.execPath, target); } catch { copyFileSync(process.execPath, target); }
+  // A hardlink shares the running test executable's Windows image lock; use
+  // independent copies so replacement/deletion models a real installation.
+  copyFileSync(process.execPath, target);
 }
 function packageAt(directory, version, fail = false) {
   for (const path of ['src', 'node', 'chromium/chrome-win', 'extension', 'node_modules']) mkdirSync(join(directory, path), { recursive: true });
