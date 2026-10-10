@@ -7,14 +7,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $source = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 $destination = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
-if (!(Test-Path (Join-Path $source 'node\node.exe'))) { throw 'Run install.ps1 from the extracted Marlin Windows package.' }
+if (!(Test-Path -LiteralPath (Join-Path $source 'node\node.exe'))) { throw 'Run install.ps1 from the extracted Marlin Windows package.' }
 if ($destination.StartsWith($source + '\', [StringComparison]::OrdinalIgnoreCase) -or $source.StartsWith($destination + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Source and installation directories must not contain one another.'
 }
 if ($source -ne $destination) {
-    if (Test-Path $destination) { throw "Destination already exists: $destination. Stop Marlin and choose a new directory or move the old installation first. Your browser data is stored separately in LocalAppData\Marlin." }
+    if (Test-Path -LiteralPath $destination) { throw "Destination already exists: $destination. Stop Marlin and choose a new directory or move the old installation first. Your browser data is stored separately in LocalAppData\Marlin." }
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    try { Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force }
+    try { Get-ChildItem -LiteralPath $source -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force } }
     catch { Remove-Item -LiteralPath $destination -Recurse -Force; throw }
 }
 if (!$NoPath) {
