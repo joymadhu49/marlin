@@ -119,11 +119,13 @@ native('ready handshake precedes waiting for daemon and browser; replacement wai
   const browser = await holdPackageProcess(f, true);
   const run = startHelper(f, ['-DaemonPid', String(daemon.pid), '-BrowserPid', String(browser.pid), '-NoRestart']);
   await ready(f, run);
-  assert.equal(version(f.install), '0.3.0');
+  assert.equal(version(f.install), '0.3.0', run.output());
+  assert.equal(daemon.exitCode, null, run.output());
+  assert.equal(browser.exitCode, null, run.output());
   await stop(daemon);
   await pause(500);
   assert.equal(version(f.install), '0.3.0');
-  assert.equal(run.child.exitCode, null);
+  assert.equal(run.child.exitCode, null, run.output());
   await stop(browser);
   const ended = await run.done;
   assert.equal(ended.code, 0, ended.output);

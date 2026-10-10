@@ -25,6 +25,7 @@ $readyWritten = $false
 $committed = $false
 $restartInFlight = $false
 $waiting = $false
+$watched = @()
 
 function FullPath([string]$Value) {
     if (!$Value -or ![IO.Path]::IsPathRooted($Value)) { throw "Update paths must be absolute: $Value" }
@@ -61,12 +62,25 @@ function Package-Processes {
         $_.ProcessId -ne $PID -and $_.ExecutablePath -and (Within ([IO.Path]::GetFullPath($_.ExecutablePath)) $InstallDir)
     })
 }
-function Check-WatchedProcess([int]$ProcessId) {
+function Watch-Process([int]$ProcessId) {
     if ($ProcessId -le 0) { return }
-    $process = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId"
-    if ($process -and (!$process.ExecutablePath -or !(Within ([IO.Path]::GetFullPath($process.ExecutablePath)) $InstallDir))) {
-        throw "Refusing to wait for unrelated process $ProcessId; its executable is outside this installation."
-    }
+    try { $process = [Diagnostics.Process]::GetProcessById($ProcessId) }
+    catch [ArgumentException] { return } # Already exited before helper startup.
+    try {
+        # Opening and retaining the handle tracks this process identity even if
+        # Windows reuses the PID after it exits. CIM is not the liveness gate.
+        $null = $process.Handle
+        if ($process.HasExited) { $process.Dispose(); return }
+        try { $executable = $process.MainModule.FileName }
+        catch {
+            if ($process.HasExited) { $process.Dispose(); return }
+            throw "Cannot inspect initiating process $ProcessId safely. $($_.Exception.Message)"
+        }
+        if (!$executable -or !(Within ([IO.Path]::GetFullPath($executable)) $InstallDir)) {
+            throw "Refusing to wait for unrelated process $ProcessId; its executable is outside this installation."
+        }
+        $script:watched += $process
+    } catch { $process.Dispose(); throw }
 }
 function Write-Result([string]$Event, [string]$Message) {
     if (!$script:logReady) { return }
@@ -145,8 +159,8 @@ try {
     $oldVersion = Validate-Package $InstallDir
     $newVersion = Validate-Package $StagedDir
     if ($DaemonPid -eq $PID -or $BrowserPid -eq $PID) { throw 'The helper cannot wait for itself.' }
-    Check-WatchedProcess $DaemonPid
-    Check-WatchedProcess $BrowserPid
+    Watch-Process $DaemonPid
+    Watch-Process $BrowserPid
     if (Test-Path -LiteralPath $ReadyFile) { throw 'Readiness file already exists.' }
     if ($ReadyDeadlineUtc -and [DateTime]::UtcNow -ge [DateTime]::Parse($ReadyDeadlineUtc).ToUniversalTime()) { throw 'Updater readiness deadline expired; no installation files were changed.' }
     if ($LockPath) {
@@ -161,12 +175,11 @@ try {
     $waiting = $true
     $deadline = [DateTime]::UtcNow.AddSeconds($WaitTimeoutSeconds)
     while ($true) {
-        Check-WatchedProcess $DaemonPid
-        Check-WatchedProcess $BrowserPid
+        $activeWatched = @($watched | Where-Object { !$_.HasExited })
         $busy = @(Package-Processes)
-        if ($busy.Count -eq 0) { break }
+        if ($activeWatched.Count -eq 0 -and $busy.Count -eq 0) { break }
         if ([DateTime]::UtcNow -ge $deadline) {
-            throw ('Timed out waiting for Marlin processes: ' + (($busy | ForEach-Object { $_.ProcessId }) -join ', ') + '. Close Marlin and MCP clients, then retry. No processes were killed.')
+            throw ('Timed out waiting for Marlin processes: ' + ((@($busy | ForEach-Object { $_.ProcessId }) + @($activeWatched | ForEach-Object { $_.Id }) | Select-Object -Unique) -join ', ') + '. Close Marlin and MCP clients, then retry. No processes were killed.')
         }
         Start-Sleep -Milliseconds 250
     }
@@ -212,6 +225,7 @@ try {
     }
     Write-Error -Message $reason -ErrorAction Continue
 } finally {
+    foreach ($process in $watched) { $process.Dispose() }
     # Only remove the lock handed to this helper, never another updater's lock.
     if ($failed -and $readyWritten) {
         try { Remove-Item -LiteralPath $ReadyFile -Force } catch {}
