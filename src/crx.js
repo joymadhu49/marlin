@@ -6,10 +6,7 @@ import { mkdtemp, writeFile, readFile, rm, mkdir, rename, cp } from 'node:fs/pro
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const run = promisify(execFile);
+import { extractZip } from './archive.js';
 
 /** Accepts a bare 32-char ID or any Web Store URL containing one. */
 export function parseExtensionRef(ref) {
@@ -86,12 +83,12 @@ export function parseCrx(buf) {
 async function unzipTo(zipBuf, dest) {
   const tmp = await mkdtemp(join(tmpdir(), 'marlin-crx-'));
   const zipPath = join(tmp, 'ext.zip');
-  await writeFile(zipPath, zipBuf);
-  await mkdir(dest, { recursive: true });
-  // unzip exits 1 on harmless warnings (extra bytes etc.); only fail on 2+.
-  try { await run('unzip', ['-q', '-o', zipPath, '-d', dest]); }
-  catch (e) { if (e.code !== 1) throw e; }
-  await rm(tmp, { recursive: true, force: true });
+  try {
+    await writeFile(zipPath, zipBuf);
+    await extractZip(zipPath, dest);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 }
 
 async function injectKey(dir, publicKey) {
