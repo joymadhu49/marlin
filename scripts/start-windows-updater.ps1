@@ -23,11 +23,20 @@ try {
     $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $request.helper) + @($request.arguments)
     $commandLine = ($arguments | ForEach-Object { Quote-Argument $_ }) -join ' '
-    # Start-Process creates an independent Windows process. Do not inherit the
-    # bootstrap's redirected streams or use Node's detached PowerShell launch.
-    $process = Start-Process -FilePath $powershell -ArgumentList $commandLine -WorkingDirectory $request.workingDirectory -WindowStyle Hidden -PassThru
-    [Console]::Out.WriteLine((@{ pid = $process.Id } | ConvertTo-Json -Compress))
+    # Use the same supported Windows shell-execution API as Start-Process,
+    # bypassing its wildcard interpretation of bracketed working directories.
+    # The independent helper must not inherit the bootstrap's redirected pipes.
+    $start = New-Object Diagnostics.ProcessStartInfo
+    $start.FileName = $powershell
+    $start.Arguments = $commandLine
+    $start.WorkingDirectory = $request.workingDirectory
+    $start.UseShellExecute = $true
+    $start.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $process = [Diagnostics.Process]::Start($start)
+    try { [Console]::Out.WriteLine((@{ pid = $process.Id } | ConvertTo-Json -Compress)) }
+    finally { $process.Dispose() }
 } catch {
-    [Console]::Error.WriteLine($_.Exception.Message)
+    [Console]::Error.WriteLine($_.Exception.ToString())
+    [Console]::Error.WriteLine($_.InvocationInfo.PositionMessage)
     exit 1
 }
