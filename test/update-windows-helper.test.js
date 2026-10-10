@@ -95,6 +95,7 @@ const restarts = f => readFileSync(join(f.data, 'restarts.log'), 'utf8').trim().
 
 native('detached helper installs/restarts literal paths, preserves profiles and cleans owned backup/workspace', async t => {
   const f = fixture(t);
+  writeFileSync(join(f.data, 'update-result.json'), JSON.stringify({ event: 'error', message: 'Previous attempt failed' }));
   const run = startHelper(f, ['-LockPath', f.lock]);
   writeFileSync(f.lock, JSON.stringify({ pid: run.child.pid }));
   const ended = await run.done;
@@ -105,8 +106,8 @@ native('detached helper installs/restarts literal paths, preserves profiles and 
   assert.equal(restarted.version, '0.3.1');
   assert.equal(restarted.home.toLowerCase(), f.data.toLowerCase());
   assert.equal(restarted.cwd.toLowerCase(), f.install.toLowerCase());
-  assert.equal(restarted.result.event, 'none');
-  assert.equal(result(f).event, 'none');
+  assert.equal(restarted.result.event, 'none', ended.output);
+  assert.equal(result(f).event, 'none', ended.output);
   assert.equal(existsSync(f.lock), false);
   assert.equal(existsSync(f.workspace), false);
   assert.equal(readdirSync(f.root).some(name => name.startsWith('.marlin-backup-')), false);
@@ -138,7 +139,7 @@ native('persistent MCP process times out without being killed and the old applic
   assert.equal(ended.code, 1, ended.output);
   assert.equal(mcp.exitCode, null, 'Helper killed the MCP client.');
   assert.equal(version(f.install), '0.3.0');
-  assert.match(result(f).message, /Close Marlin and MCP clients/);
+  assert.match(result(f).message, /Close Marlin and MCP clients/, ended.output);
   assert.equal(restarts(f)[0].version, '0.3.0');
   assert.equal(restarts(f)[0].result.event, 'error');
   assert.equal(existsSync(f.ready), false);
@@ -150,10 +151,10 @@ native('failed new launcher rolls back and writes error before reopening the old
   assert.equal(ended.code, 1, ended.output);
   assert.equal(version(f.install), '0.3.0');
   assert.equal(version(f.stage), '0.3.1');
-  assert.match(result(f).message, /exit code 7/);
+  assert.match(result(f).message, /exit code 7/, ended.output);
   const launches = restarts(f);
   assert.deepEqual(launches.map(item => item.version), ['0.3.1', '0.3.0']);
-  assert.equal(launches[1].result.event, 'error');
+  assert.equal(launches[1].result.event, 'error', ended.output);
   assert.equal(readFileSync(join(f.data, 'wallet-profile.json'), 'utf8'), '{"preserve":"user data"}');
   assert.match(readFileSync(f.log, 'utf8'), /Previous package restored/);
 });
@@ -163,12 +164,13 @@ native('invalid stage and an expired readiness deadline never replace the old pa
   rmSync(join(f.stage, 'extension', 'manifest.json'));
   const invalid = await startHelper(f, ['-NoRestart']).done;
   assert.equal(invalid.code, 1, invalid.output);
+  assert.match(result(f).message, /Required package file is missing: extension/, invalid.output);
   assert.equal(version(f.install), '0.3.0');
   assert.equal(existsSync(f.ready), false);
   writeFileSync(join(f.stage, 'extension', 'manifest.json'), '{}');
   const expired = await startHelper(f, ['-NoRestart', '-ReadyDeadlineUtc', '2000-01-01T00:00:00Z']).done;
   assert.equal(expired.code, 1, expired.output);
-  assert.match(result(f).message, /readiness deadline expired/);
+  assert.match(result(f).message, /readiness deadline expired/, expired.output);
   assert.equal(version(f.install), '0.3.0');
   assert.equal(existsSync(f.ready), false);
 });
@@ -177,7 +179,7 @@ native('helper rejects unrelated PIDs and data paths inside the installation', a
   const f = fixture(t);
   const unrelated = await startHelper(f, ['-DaemonPid', String(process.pid), '-NoRestart']).done;
   assert.equal(unrelated.code, 1, unrelated.output);
-  assert.match(result(f).message, /unrelated process/);
+  assert.match(result(f).message, /unrelated process/, unrelated.output);
   assert.equal(version(f.install), '0.3.0');
   const nestedData = join(f.install, 'user profile');
   mkdirSync(nestedData);
@@ -207,7 +209,7 @@ native('restart timeout retains the active installation and its rollback backup'
     assert.equal(existsSync(f.stage), false);
     assert.ok(readdirSync(f.root).some(name => name.startsWith('.marlin-backup-')));
     assert.match(readFileSync(f.log, 'utf8'), /left untouched/);
-    assert.equal(result(f).event, 'error');
+    assert.equal(result(f).event, 'error', ended.output);
   } finally {
     if (!childPid && existsSync(pidFile)) childPid = Number(readFileSync(pidFile, 'utf8'));
     if (childPid) {

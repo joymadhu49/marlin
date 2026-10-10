@@ -42,10 +42,13 @@ function Log([string]$Message) {
     Write-Output $line
 }
 function Validate-Package([string]$Directory) {
-    $item = Get-Item -LiteralPath $Directory -Force
+    if (!(Test-Path -LiteralPath $Directory -PathType Container)) { throw "Package directory is missing: $Directory" }
+    $item = Get-Item -LiteralPath $Directory -Force -ErrorAction Stop
     if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Package root must be a real directory: $Directory" }
     foreach ($file in @('package.json', 'marlin.cmd', 'src\cli.js', 'node\node.exe', 'chromium\chrome-win\chrome.exe', 'extension\manifest.json')) {
-        $entry = Get-Item -LiteralPath (Join-Path $Directory $file) -Force
+        $filePath = Join-Path $Directory $file
+        if (!(Test-Path -LiteralPath $filePath -PathType Leaf)) { throw "Required package file is missing: $file" }
+        $entry = Get-Item -LiteralPath $filePath -Force -ErrorAction Stop
         if ($entry.PSIsContainer -or $entry.Length -eq 0 -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Invalid package file: $file" }
     }
     if (!(Test-Path -LiteralPath (Join-Path $Directory 'node_modules') -PathType Container)) { throw 'Package dependencies are missing.' }
@@ -70,8 +73,14 @@ function Write-Result([string]$Event, [string]$Message) {
     $result = Join-Path $dataHome 'update-result.json'
     $temporary = $result + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     [IO.File]::WriteAllText($temporary, (@{ event = $Event; message = $Message } | ConvertTo-Json -Compress), $utf8)
-    if (Test-Path -LiteralPath $result) { [IO.File]::Replace($temporary, $result, $null) }
-    else { [IO.File]::Move($temporary, $result) }
+    try {
+        # Windows PowerShell coerces ordinary $null into an empty string for
+        # this .NET string parameter. NullString supplies a real null backup.
+        if (Test-Path -LiteralPath $result) { [IO.File]::Replace($temporary, $result, [System.Management.Automation.Language.NullString]::Value) }
+        else { [IO.File]::Move($temporary, $result) }
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { [IO.File]::Delete($temporary) }
+    }
 }
 # These roots are generated/owned by this helper, never supplied cleanup paths.
 # Do not follow a package junction into user data while deleting old files.
