@@ -1,4 +1,4 @@
-// Promote a successful Windows artifact; never rebuild or overwrite a release.
+// Promote the exact tested architecture artifacts; never rebuild or overwrite.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -20,27 +20,40 @@ const regressions = JSON.parse(gh(['api', `repos/${repo}/actions/workflows/tests
 if (!regressions.workflow_runs?.some(r => r.head_sha === source && r.conclusion === 'success')) {
   throw new Error('The Linux/macOS/Windows regression matrix must also pass for this exact source');
 }
+const architectures = ['x64', 'arm64', 'x86'];
 const artifacts = JSON.parse(gh(['api', `repos/${repo}/actions/runs/${runId}/artifacts`])).artifacts;
-if (!artifacts.some(a => a.name === 'marlin-windows-x64' && !a.expired)) throw new Error('Tested package artifact is unavailable');
+for (const arch of architectures) {
+  if (artifacts.filter(a => a.name === `marlin-windows-${arch}` && !a.expired).length !== 1) {
+    throw new Error(`Exactly one tested ${arch} package artifact is required`);
+  }
+}
 const dir = mkdtempSync(join(tmpdir(), 'marlin-publish-'));
 try {
-  gh(['run', 'download', runId, '--repo', repo, '--name', 'marlin-windows-x64', '--dir', dir]);
-  const name = `Marlin-${tag.slice(1)}-windows-x64.zip`;
-  const files = readdirSync(dir).sort();
-  if (JSON.stringify(files) !== JSON.stringify([name, `${name}.sha256`].sort())) throw new Error('Unexpected package artifact contents');
-  const archive = join(dir, name);
-  const checksum = readFileSync(`${archive}.sha256`, 'utf8').trim();
-  const match = /^([a-fA-F0-9]{64})\s+(.+)$/.exec(checksum);
-  if (!match || match[2] !== name) throw new Error('Invalid checksum sidecar');
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(archive)) hash.update(chunk);
-  const actual = hash.digest('hex');
-  if (actual !== match[1].toLowerCase()) throw new Error('Package checksum mismatch');
-  const metadata = JSON.parse(execFileSync('unzip', ['-p', archive, 'Marlin-win32-x64/package.json'], { encoding: 'utf8' }));
-  if (`v${metadata.version}` !== tag) throw new Error('Bundled version does not match release tag');
-  console.log(`Verified ${name}: sha256:${actual}, source ${source}, build ${runId}`);
-  console.log(gh(['release', 'create', tag, archive, `${archive}.sha256`, '--repo', repo,
-    '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${metadata.version} — Windows x64`,
+  const uploads = [];
+  for (const arch of architectures) {
+    const target = join(dir, arch);
+    gh(['run', 'download', runId, '--repo', repo, '--name', `marlin-windows-${arch}`, '--dir', target]);
+    const name = `Marlin-${tag.slice(1)}-windows-${arch}.zip`;
+    if (JSON.stringify(readdirSync(target).sort()) !== JSON.stringify([name, `${name}.sha256`].sort())) {
+      throw new Error(`Unexpected ${arch} package artifact contents`);
+    }
+    const archive = join(target, name);
+    const match = /^([a-fA-F0-9]{64})\s+(.+)$/.exec(readFileSync(`${archive}.sha256`, 'utf8').trim());
+    if (!match || match[2] !== name) throw new Error(`Invalid ${arch} checksum sidecar`);
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(archive)) hash.update(chunk);
+    const actual = hash.digest('hex');
+    if (actual !== match[1].toLowerCase()) throw new Error(`${arch} package checksum mismatch`);
+    const metadata = JSON.parse(execFileSync('unzip', ['-p', archive, `Marlin-win32-${arch}/package.json`], { encoding: 'utf8' }));
+    if (metadata.name !== 'marlin' || `v${metadata.version}` !== tag || metadata.marlinWindowsArch !== arch) {
+      throw new Error(`Bundled ${arch} package identity, architecture or version does not match the release`);
+    }
+    console.log(`Verified ${name}: sha256:${actual}, source ${source}, build ${runId}`);
+    uploads.push(archive, `${archive}.sha256`);
+  }
+  // Preserve releases/latest for the signed macOS appcast used by existing Macs.
+  console.log(gh(['release', 'create', tag, ...uploads, '--repo', repo,
+    '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${tag.slice(1)} — Windows x64, ARM64 and x86`,
     '--notes-file', 'docs/windows-release-notes.md']));
 } finally {
   rmSync(dir, { recursive: true, force: true });
