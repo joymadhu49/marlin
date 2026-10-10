@@ -6,6 +6,7 @@
 - Windows DPAPI CurrentUser protects stored secrets; macOS continues to use Keychain.
 - Native Windows package smoke checks and a Linux/macOS/Windows regression matrix.
 - Windows-aware password selection shortcuts and extension source paths.
+- Reject malformed HTTP and WebSocket upgrade request targets without terminating the daemon.
 
 ## 0.2.2
 

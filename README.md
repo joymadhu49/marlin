@@ -107,6 +107,14 @@ Dev builds: `bash app/build-app.sh --install` (ad hoc signed, no updater feed ch
 
 ## Tests
 
+The server regression tests run without Chromium or Keychain access and were verified on Node 22.22.3. The script enables Node's experimental module mocking support.
+
+```
+npm run test:server
+```
+
+Browser integration checks require a downloaded Chromium binary:
+
 ```
 npm run test:unit       # browser-independent regressions; Node 22.22.3
 ```
