@@ -6,6 +6,8 @@
 # Release signing, notarization and the DMG live in scripts/release.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/scripts/build-common.sh"
+require_build_tools
 SRC_APP="$ROOT/chromium/chrome-mac/Chromium.app"
 OUT="$ROOT/dist/Marlin.app"
 SPARKLE="$ROOT/vendor/sparkle"
@@ -50,7 +52,7 @@ iconutil -c icns "$ICONSET" -o "$C/Resources/app.icns"
 mkdir -p "$C/Resources/app" "$C/Resources/node/bin"
 rsync -a --exclude /chromium --exclude /dist --exclude /test --exclude /.keys --exclude /.git \
   --exclude /vendor --exclude /updater --exclude /node_modules "$ROOT/" "$C/Resources/app/"
-(cd "$C/Resources/app" && pnpm install --prod --frozen-lockfile --silent --config.node-linker=hoisted >/dev/null)
+(cd "$C/Resources/app" && install_dependencies production >/dev/null)
 cp "$(node -p 'process.execPath')" "$C/Resources/node/bin/node"
 
 # Sparkle updater helper.
