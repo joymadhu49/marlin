@@ -25,11 +25,27 @@ function command(home, operation, name = 'wallet', value) {
   return new Promise((resolve, reject) => {
     const child = execFile(process.execPath, ['--input-type=module', '-e', script, operation, name], {
       cwd: root, env: { ...process.env, MARLIN_HOME: home }, timeout: 30000, windowsHide: true,
-    }, (error, stdout) => error ? reject(error) : resolve(stdout ? JSON.parse(stdout) : undefined));
+    }, (error, stdout, stderr) => {
+      if (error) return reject(Object.assign(error, { stdout, stderr }));
+      try { resolve(stdout ? JSON.parse(stdout) : undefined); }
+      catch (parseError) { reject(parseError); }
+    });
     child.stdin.on('error', reject);
     child.stdin.end(value === undefined ? '' : JSON.stringify(value));
   });
 }
+
+test('vault subprocess failures preserve stderr for native failure assertions', async (t) => {
+  const home = await mkdtemp(join(tmpdir(), 'marlin-vault-error-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  // Invalid names fail before reaching Keychain or DPAPI on every platform.
+  await assert.rejects(command(home, 'get', 'invalid/name'), (error) => {
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, '');
+    assert.match(error.stderr, /Secret names use/);
+    return true;
+  });
+});
 
 test('native Windows DPAPI persists Unicode/newlines, decrypts after restart and redacts', {
   skip: process.platform !== 'win32', timeout: 120000,
@@ -65,6 +81,8 @@ test('native Windows DPAPI reports damaged ciphertext without exposing a passwor
   const [file] = await readdir(join(home, 'vault'));
   await writeFile(join(home, 'vault', file), Buffer.from('damaged ciphertext'));
   await assert.rejects(command(home, 'get'), (error) => {
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, '');
     assert.match(error.stderr, /damaged or protected by a different Windows account/);
     assert.ok(!error.stderr.includes(value));
     return true;
