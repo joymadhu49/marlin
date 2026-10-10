@@ -20,9 +20,9 @@ export function openRouterKey(config) {
 }
 
 let modelCache = { at: 0, list: [] };
-export async function listModels() {
+export async function listModels({ signal } = {}) {
   if (Date.now() - modelCache.at < 10 * 60_000 && modelCache.list.length) return modelCache.list;
-  const res = await fetch(`${OR}/models`);
+  const res = await fetch(`${OR}/models`, { signal });
   const { data } = await res.json();
   const list = data
     .filter((m) => (m.supported_parameters || []).includes('tools') && !m.id.endsWith(':batch'))
@@ -59,11 +59,10 @@ export class Agent {
   reset() { this.history = []; }
 
   async run(task, model) {
+    if (this.busy) throw new Error('Agent is already running');
     const key = openRouterKey(this.config);
     if (!key) throw new Error('No OpenRouter key. Set OPENROUTER_API_KEY or add it in sidebar settings.');
     model ||= this.config.model;
-    const models = await listModels().catch(() => []);
-    const vision = models.find((m) => m.id === model)?.vision ?? true;
     this.abort = new AbortController();
     const signal = this.abort.signal;
     const toolDefs = Object.values(this.tools).map((t) => ({
@@ -71,8 +70,14 @@ export class Agent {
       function: { name: t.name, description: t.description, parameters: t.jsonSchema },
     }));
     const messages = [{ role: 'system', content: SYSTEM }, ...this.history, { role: 'user', content: task }];
-    this.emit({ type: 'run_start', model });
     try {
+      this.emit({ type: 'run_start', model });
+      const models = await listModels({ signal }).catch((error) => {
+        if (signal.aborted) throw error;
+        return [];
+      });
+      signal.throwIfAborted();
+      const vision = models.find((m) => m.id === model)?.vision ?? true;
       for (let step = 0; step < this.config.maxSteps; step++) {
         const res = await fetch(`${OR}/chat/completions`, {
           method: 'POST',

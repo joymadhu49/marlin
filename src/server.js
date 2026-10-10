@@ -145,7 +145,8 @@ export async function startDaemon({ headless } = {}) {
         switch (msg.type) {
           case 'chat':
             if (agent.busy) return reply({ type: 'error', text: 'Agent is already running' });
-            agent.run(String(msg.text || ''), msg.model || config.model);
+            await agent.run(String(msg.text || ''), msg.model || config.model)
+              .catch((error) => reply({ type: 'run_end', error: error.message }));
             break;
           case 'stop': agent.stop(); break;
           case 'reset': agent.reset(); reply({ type: 'reset_done' }); break;
