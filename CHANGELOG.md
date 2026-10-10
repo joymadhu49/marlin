@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Integrate the browser, daemon, extension and updater reliability fixes into the macOS release line.
+- Prepare Windows packages for x64, ARM64 and x86, with architecture-specific in-browser updates and checksums.
+- Keep macOS Sparkle and installed Windows updater channels compatible.
+
+## 0.3.0-windows.3
+
+- Add Windows ARM64 and x86 distributions alongside x64.
+- Select and validate the update package for the running architecture.
+- Validate the native ARM64 package and x86 runtime under WoW64 in addition to x64.
+
 ## 0.3.0-windows.2
 
 - Windows checks for new releases inside Marlin and installs them through the About page or sidebar, with download progress and restart.

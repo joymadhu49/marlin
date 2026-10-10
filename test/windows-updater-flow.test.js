@@ -25,7 +25,8 @@ const { runWindowsUpdater, canUpdateWindows } = await import(moduleURL);
 const version = '0.3.0-windows.2';
 const payload = Buffer.from('verified native updater fixture');
 const digest = createHash('sha256').update(payload).digest('hex');
-const name = 'Marlin-' + version + '-windows-x64.zip';
+const packageArch = process.arch === 'ia32' ? 'x86' : process.arch;
+const name = 'Marlin-' + version + '-windows-' + packageArch + '.zip';
 const url = 'https://github.com/joymadhu49/marlin/releases/download/v' + version + '/' + name;
 const release = { tag_name: 'v' + version, draft: false, prerelease: true, assets: [
   { name, size: payload.length, digest: 'sha256:' + digest, browser_download_url: url },
@@ -44,7 +45,7 @@ const result = await runWindowsUpdater('install', (event) => events.push(event),
     return new Response(payload);
   },
   extract: async (_, destination) => {
-    const stage = join(destination, 'Marlin-win32-x64');
+    const stage = join(destination, 'Marlin-win32-' + packageArch);
     for (const file of ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
       'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json']) {
       const target = join(stage, ...file.split('/'));

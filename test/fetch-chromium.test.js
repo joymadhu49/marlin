@@ -13,13 +13,14 @@ async function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }
-test('downloads the Windows archive and records the revision', async (t) => {
+for (const [arch, bucket] of [['x64', 'Win_x64'], ['arm64', 'Win_Arm64'], ['ia32', 'Win']])
+test(`downloads the Windows ${arch} archive and records the revision`, async (t) => {
   const root = await fixture(t), urls = [];
-  const result = await fetchChromium({ root, platform: 'win32', arch: 'x64', revision: '',
+  const result = await fetchChromium({ root, platform: 'win32', arch, revision: '',
     fetchImpl: async (url) => { urls.push(url); return new Response(url.endsWith('LAST_CHANGE') ? '12345\n' : 'zip'); },
     extract: async (_, dest) => { await mkdir(join(dest, 'chrome-win')); await writeFile(join(dest, 'chrome-win', 'chrome.exe'), 'binary'); },
   });
-  assert.equal(urls[1], 'https://storage.googleapis.com/chromium-browser-snapshots/Win_x64/12345/chrome-win.zip');
+  assert.equal(urls[1], `https://storage.googleapis.com/chromium-browser-snapshots/${bucket}/12345/chrome-win.zip`);
   assert.equal(await readFile(result.executable, 'utf8'), 'binary');
   assert.equal(await readFile(join(root, 'chromium', 'REVISION'), 'utf8'), '12345');
   assert.deepEqual((await readdir(join(root, 'chromium'))).sort(), ['REVISION', 'chrome-win']);
