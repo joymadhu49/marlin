@@ -27,8 +27,17 @@ export function runUpdater(mode, onEvent = () => {}) {
     createInterface({ input: child.stdout }).on('line', (line) => {
       try { last = JSON.parse(line); onEvent(last); } catch {}
     });
-    child.on('exit', () => resolve(last));
-    child.on('error', (err) => { last = { event: 'error', message: err.message }; onEvent(last); resolve(last); });
+    // `exit` can precede the final stdout data. `close` waits for the pipes.
+    child.on('close', (code, signal) => {
+      if ((signal || code !== 0) && last.event !== 'error') {
+        last = { event: 'error', message: signal
+          ? `Update helper terminated by ${signal}.`
+          : `Update helper exited with code ${code}.` };
+        onEvent(last);
+      }
+      resolve(last);
+    });
+    child.on('error', (err) => { last = { event: 'error', message: err.message }; onEvent(last); });
     if (mode === 'install') child.unref();
   });
 }
