@@ -1,7 +1,7 @@
 // Promote the exact tested architecture artifacts; never rebuild or overwrite.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createReadStream, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,6 +12,10 @@ if (!/^\d+$/.test(runId || '') || !/^[a-f0-9]{40}$/.test(source || '') || !/^v\d
 const repo = process.env.GH_REPO;
 if (repo !== 'joymadhu49/marlin') throw new Error('This publisher is restricted to joymadhu49/marlin');
 const gh = (args) => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }).trim();
+const refs = JSON.parse(gh(['api', `repos/${repo}/git/matching-refs/tags/${tag}`]));
+if (refs.some(ref => ref.ref === `refs/tags/${tag}`)) {
+  throw new Error('The release tag already exists; refusing to reuse or overwrite it');
+}
 const run = JSON.parse(gh(['api', `repos/${repo}/actions/runs/${runId}`]));
 if (run.conclusion !== 'success' || run.head_sha !== source || run.path !== '.github/workflows/windows.yml') {
   throw new Error('Artifact source must match a successful Windows package workflow exactly');
@@ -52,9 +56,11 @@ try {
     uploads.push(archive, `${archive}.sha256`);
   }
   // Preserve releases/latest for the signed macOS appcast used by existing Macs.
+  const notes = join(dir, 'release-notes.md');
+  writeFileSync(notes, `${readFileSync('docs/windows-release-notes.md', 'utf8')}\n\nSource: ${source}. Tested packages: https://github.com/${repo}/actions/runs/${runId}.\n`);
   console.log(gh(['release', 'create', tag, ...uploads, '--repo', repo,
     '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${tag.slice(1)} — Windows x64, ARM64 and x86`,
-    '--notes-file', 'docs/windows-release-notes.md']));
+    '--notes-file', notes]));
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
