@@ -51,7 +51,13 @@ export async function startDaemon({ headless } = {}) {
   mb.on('event', (text) => broadcast({ type: 'browser_event', text }));
 
   // Updates live in the browser UI: a quiet check after the human opens Marlin.
-  let update = { event: 'idle' };
+  // A detached Windows installer can fail after this daemon exits. Surface its
+  // result after restart instead of losing it with the old WebSocket connection.
+  const previousUpdate = process.platform === 'win32'
+    ? readJson(join(paths.home, 'update-result.json'), null) : null;
+  let update = previousUpdate?.event === 'error'
+    ? { event: 'error', message: String(previousUpdate.message || 'The previous update failed. See update.log in the Marlin data directory.') }
+    : { event: 'idle' };
   let updateBusy = false;
   const onUpdate = (e) => { update = { ...update, ...e }; broadcast({ type: 'update_status', ...update }); };
   async function checkUpdate() {
@@ -73,7 +79,7 @@ export async function startDaemon({ headless } = {}) {
     } catch (error) { onUpdate({ event: 'error', message: error.message }); }
     finally { updateBusy = false; }
   }
-  if (!config.headless && canUpdate()) setTimeout(checkUpdate, 8000);
+  if (!config.headless && canUpdate() && update.event !== 'error') setTimeout(checkUpdate, 8000);
 
   const server = http.createServer(async (req, res) => {
     const send = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
