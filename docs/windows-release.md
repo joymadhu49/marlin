@@ -14,4 +14,6 @@ The packaged x64 runtime checks quietly after Marlin opens. The About page and s
 
 The original Windows preview needs one installation of an updater-capable version. It cannot acquire an updater through a feature it does not contain. Later updates need no manual ZIP extraction.
 
+For that initial migration, close Marlin and MCP clients. If installed per-user, rename the existing `%LOCALAPPDATA%\Programs\Marlin` app folder to a backup and run the new package's `install.ps1`; it deliberately refuses to overwrite an existing directory. Keep `%LOCALAPPDATA%\Marlin` (the profile and secrets) in place. Reusing the original application path preserves shortcuts and MCP paths. A portable installation at a new path needs updated shortcuts and MCP configuration.
+
 Source checkouts, custom runtimes and other architectures are not automatically replaced. Data must live outside the application folder. MCP clients using the bundled Node runtime should be closed before installation to avoid Windows file locks. Windows ZIPs are currently unsigned; HTTPS and SHA256 verification are not a substitute for Authenticode or independently signed update metadata.
