@@ -49,7 +49,7 @@ function release(version = newer) {
     { name: `${name}.sha256`, browser_download_url: `${url}.sha256`, size: 150 },
   ] };
 }
-async function fixture(t) {
+async function fixture(t, arch = 'x64') {
   const parent = await mkdtemp(join(tmpdir(), 'marlin updater '));
   t.after(() => rm(parent, { recursive: true, force: true }));
   const root = join(parent, 'Marlin'), dataHome = join(parent, 'profile');
@@ -57,8 +57,13 @@ async function fixture(t) {
   await mkdir(dataHome);
   const state = { events: [], requested: [], extracted: false, spawned: false, ready: false, killed: false, shutdown: false };
   const info = release();
+  const packageArch = arch === 'ia32' ? 'x86' : arch;
+  for (const asset of info.assets) {
+    asset.name = asset.name.replace('windows-x64', `windows-${packageArch}`);
+    asset.browser_download_url = asset.browser_download_url.replace('windows-x64', `windows-${packageArch}`);
+  }
   const options = {
-    root, dataHome, executable: join(root, 'node', 'node.exe'), platform: 'win32', arch: 'x64',
+    root, dataHome, executable: join(root, 'node', 'node.exe'), platform: 'win32', arch,
     fetchImpl: async (url) => {
       state.requested.push(url);
       if (url.startsWith('https://api.github.com/')) return Response.json([info]);
@@ -68,7 +73,7 @@ async function fixture(t) {
     extract: async (archive, destination) => {
       state.extracted = true;
       assert.deepEqual(await readFile(archive), payload);
-      await packageAt(join(destination, 'Marlin-win32-x64'), newer);
+      await packageAt(join(destination, `Marlin-win32-${packageArch}`), newer);
     },
     spawnImpl: (command, args, spawnOptions) => {
       state.spawned = true;
@@ -100,7 +105,7 @@ test('only a Windows bundle running its bundled executable is eligible', async (
   const f = await fixture(t);
   assert.equal(canUpdateWindows(f.options), true);
   assert.equal(canUpdateWindows({ ...f.options, platform: 'darwin' }), false);
-  assert.equal(canUpdateWindows({ ...f.options, arch: 'arm64' }), false);
+  assert.equal(canUpdateWindows({ ...f.options, arch: 'arm' }), false);
   assert.equal(canUpdateWindows({ ...f.options, executable: process.execPath }), false);
   await rm(join(f.root, 'marlin.cmd'));
   assert.equal(canUpdateWindows(f.options), false);
@@ -377,3 +382,32 @@ test('bootstrap PID cannot substitute for the independent helper readiness PID',
   assert.equal(f.state.shutdown, false);
   assert.equal(existsSync(f.lockPath), false);
 });
+
+for (const arch of ['arm64', 'ia32']) {
+  test(`Windows ${arch} updates select and install only the matching package`, async (t) => {
+    const f = await fixture(t, arch);
+    assert.equal(canUpdateWindows(f.options), true);
+    assert.deepEqual(await f.run(), { event: 'restarting', version: newer });
+    const suffix = arch === 'ia32' ? 'x86' : arch;
+    assert.ok(f.state.requested.some(url => url.endsWith(`-windows-${suffix}.zip`)));
+    assert.equal(f.state.shutdown, true);
+  });
+  test(`Windows ${arch} rejects a release containing only x64 assets`, async (t) => {
+    const f = await fixture(t, arch);
+    f.options.fetchImpl = async () => Response.json([release()]);
+    assert.match((await f.run()).message, /requires exactly one/);
+    assert.equal(f.state.spawned, false);
+  });
+  test(`Windows ${arch} rejects conflicting extracted architecture metadata`, async (t) => {
+    const f = await fixture(t, arch);
+    const extract = f.options.extract;
+    f.options.extract = async (archive, destination) => {
+      await extract(archive, destination);
+      const packageArch = arch === 'ia32' ? 'x86' : arch;
+      await writeFile(join(destination, `Marlin-win32-${packageArch}`, 'package.json'),
+        JSON.stringify({ name: 'marlin', version: newer, marlinWindowsArch: 'x64' }));
+    };
+    assert.match((await f.run()).message, /architecture does not match/);
+    assert.equal(f.state.spawned, false);
+  });
+}

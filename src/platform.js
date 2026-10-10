@@ -9,8 +9,8 @@ export function dataHome(platform = process.platform, env = process.env, home = 
 }
 
 export function chromiumTarget(platform = process.platform, arch = process.arch) {
-  if (platform === 'win32' && arch === 'x64') {
-    return { bucket: 'Win_x64', archive: 'chrome-win.zip', directory: 'chrome-win', executable: ['chrome-win', 'chrome.exe'] };
+  if (platform === 'win32' && ['x64', 'arm64', 'ia32'].includes(arch)) {
+    return { bucket: { x64: 'Win_x64', arm64: 'Win_Arm64', ia32: 'Win' }[arch], archive: 'chrome-win.zip', directory: 'chrome-win', executable: ['chrome-win', 'chrome.exe'] };
   }
   if (platform === 'darwin' && ['arm64', 'x64'].includes(arch)) {
     return { bucket: arch === 'arm64' ? 'Mac_Arm' : 'Mac', archive: 'chrome-mac.zip', directory: 'chrome-mac', executable: ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'] };

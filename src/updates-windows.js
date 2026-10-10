@@ -34,7 +34,7 @@ function regularFile(file) {
 
 /** Only the bundled Windows runtime may replace its own portable installation. */
 export function canUpdateWindows({ root = ROOT, platform = process.platform, arch = process.arch, executable = process.execPath } = {}) {
-  if (platform !== 'win32' || arch !== 'x64') return false;
+  if (platform !== 'win32' || !['x64', 'arm64', 'ia32'].includes(arch)) return false;
   try {
     if (!lstatSync(root).isDirectory() || !regularFile(join(root, 'node', 'node.exe')) || !regularFile(join(root, 'marlin.cmd'))) return false;
     if (realpathSync(executable).toLowerCase() !== realpathSync(join(root, 'node', 'node.exe')).toLowerCase()) return false;
@@ -83,7 +83,7 @@ async function boundedText(response, limit) {
   }
   return Buffer.concat(chunks).toString('utf8');
 }
-async function latestRelease(current, fetchImpl, signal) {
+async function latestRelease(current, arch, fetchImpl, signal) {
   let latest;
   for (let page = 1; page <= 10; page++) {
     const response = await request(`${API}?per_page=100&page=${page}`, fetchImpl, signal);
@@ -97,7 +97,7 @@ async function latestRelease(current, fetchImpl, signal) {
   }
   if (!latest || compareVersions(latest.tag_name, current) <= 0) return null;
   const version = latest.tag_name.replace(/^v/, '');
-  const name = `Marlin-${version}-windows-x64.zip`;
+  const name = `Marlin-${version}-windows-${arch === 'ia32' ? 'x86' : arch}.zip`;
   const assets = latest.assets;
   if (!Array.isArray(assets)) throw new Error('Windows release assets are missing.');
   const find = (assetName) => {
@@ -165,7 +165,7 @@ async function releaseLock(file, token) {
   const owner = await readFile(file, 'utf8').then(JSON.parse).catch(() => null);
   if (owner?.token === token) await rm(file, { force: true });
 }
-function validatePackage(stage, version) {
+function validatePackage(stage, version, arch) {
   const required = ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
     'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json'];
   if (!lstatSync(stage).isDirectory()) throw new Error('Windows update package root is invalid.');
@@ -176,6 +176,8 @@ function validatePackage(stage, version) {
   }
   const pkg = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8'));
   if (pkg.name !== 'marlin' || pkg.version !== version) throw new Error('Windows update package version or name does not match the release.');
+  const packageArch = arch === 'ia32' ? 'x86' : arch;
+  if (pkg.marlinWindowsArch != null && pkg.marlinWindowsArch !== packageArch) throw new Error('Windows update package architecture does not match the running installation.');
 }
 async function download(release, archive, fetchImpl, signal, emit) {
   const text = await boundedText(await request(release.checksum.browser_download_url, fetchImpl, signal, { asset: true }), 4096);
@@ -213,7 +215,7 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
   try {
     signal.throwIfAborted();
     if (!['check', 'install'].includes(mode)) throw new Error('Unknown Windows update action.');
-    if (!canUpdateWindows({ root, platform, arch, executable })) throw new Error('Automatic Windows updates require a bundled Windows x64 installation.');
+    if (!canUpdateWindows({ root, platform, arch, executable })) throw new Error('Automatic Windows updates require a bundled Windows x64, ARM64 or x86 installation.');
     const install = realpathSync(root);
     if (inside(install, resolve(dataHome))) throw new Error('Windows updates require MARLIN_HOME outside the installation directory.');
     await mkdir(dataHome, { recursive: true });
@@ -227,7 +229,7 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     }
     emit({ event: 'checking' });
     const current = JSON.parse(await readFile(join(install, 'package.json'), 'utf8')).version;
-    const release = await latestRelease(current, fetchImpl, signal);
+    const release = await latestRelease(current, arch, fetchImpl, signal);
     if (!release) { emit({ event: 'none' }); return last; }
     emit({ event: 'available', version: release.version, notes: release.notes, size: release.archive.size });
     if (mode === 'check') return last;
@@ -243,8 +245,8 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     const extracted = join(workspace, 'extracted');
     await extract(archive, extracted);
     signal.throwIfAborted();
-    const packageRoot = join(extracted, 'Marlin-win32-x64');
-    validatePackage(packageRoot, release.version);
+    const packageRoot = join(extracted, `Marlin-win32-${arch === 'ia32' ? 'x86' : arch}`);
+    validatePackage(packageRoot, release.version, arch);
     staged = join(dirname(install), `.marlin-stage-${token}`);
     await rename(packageRoot, staged);
     const helper = join(workspace, 'update-windows.ps1');

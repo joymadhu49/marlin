@@ -26,7 +26,8 @@ const cli = join(appRoot, 'src', 'cli.js');
 for (const file of [bundledNode, cli, join(appRoot, 'marlin.cmd'), join(appRoot, 'install.ps1'), join(appRoot, 'chromium', 'chrome-win', 'chrome.exe')]) {
   assert.ok(existsSync(file), `Missing package file: ${file}`);
 }
-const version = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).version;
+const metadata = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8'));
+const version = metadata.version;
 const home = mkdtempSync(join(tmpdir(), 'marlin windows smoke-'));
 const env = { ...process.env, MARLIN_HOME: home };
 // Verify the bundled Chromium lookup, even if the developer has an override.
@@ -129,6 +130,14 @@ async function cleanup() {
 }
 
 try {
+  await step('bundled Node architecture matches the package metadata', async () => {
+    const { stdout } = await exec(bundledNode, ['-p', 'process.arch'], { env, windowsHide: true, timeout: 20_000 });
+    const expected = metadata.marlinWindowsArch === 'x86' ? 'ia32' : metadata.marlinWindowsArch;
+    assert.ok(['x64', 'arm64', 'ia32'].includes(expected));
+    assert.equal(stdout.trim(), expected);
+    assert.equal(process.arch, expected, 'Smoke test must run with the target Node architecture.');
+  });
+
   await step('bundled CLI version and setup configuration', async () => {
     assert.equal((await runCli(['version'])).stdout.trim(), version);
     await runCli(['setup']);

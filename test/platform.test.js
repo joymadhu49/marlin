@@ -14,6 +14,8 @@ test('Chromium layout follows the requested OS and architecture', () => {
   assert.deepEqual(chromiumTarget('win32', 'x64').executable, ['chrome-win', 'chrome.exe']);
   assert.equal(chromiumTarget('darwin', 'arm64').bucket, 'Mac_Arm');
   assert.equal(chromiumTarget('darwin', 'x64').bucket, 'Mac');
-  assert.throws(() => chromiumTarget('win32', 'arm64'), /not supported/);
+  assert.equal(chromiumTarget('win32', 'arm64').bucket, 'Win_Arm64');
+  assert.equal(chromiumTarget('win32', 'ia32').bucket, 'Win');
+  assert.throws(() => chromiumTarget('win32', 'arm'), /not supported/);
   assert.throws(() => chromiumTarget('linux', 'x64'), /MARLIN_CHROMIUM/);
 });
