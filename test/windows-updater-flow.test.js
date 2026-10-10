@@ -18,7 +18,7 @@ const beforeVersion = '0.3.0-windows.1', afterVersion = '0.3.0-windows.2';
 const runnerSource = String.raw`
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 const [moduleURL, installRoot, dataHome, helperSource] = process.argv.slice(2);
 const { runWindowsUpdater, canUpdateWindows } = await import(moduleURL);
@@ -57,7 +57,9 @@ const result = await runWindowsUpdater('install', (event) => events.push(event),
   },
 });
 await writeFile(join(dataHome, 'handoff.json'), JSON.stringify({ result, events }));
-assert.equal(result.event, 'restarting', result.message);
+const diagnostics = await Promise.all(['update.log', 'update-result.json'].map(async (file) =>
+  file + ': ' + await readFile(join(dataHome, file), 'utf8').catch((error) => error.code)));
+assert.equal(result.event, 'restarting', [result.message, ...diagnostics].join('\n'));
 // No shutdown callback: a CLI parent must naturally exit for replacement.
 `;
 
@@ -82,11 +84,17 @@ test('Windows updater verifies, hands off, replaces and relaunches while preserv
   await writeFile(join(installation, 'package.json'), JSON.stringify({ name: 'marlin', version: beforeVersion, type: 'module' }));
   const runner = join(directory, 'run-update.mjs');
   await writeFile(runner, runnerSource);
-  await run(join(installation, 'node', 'node.exe'), [runner,
-    new URL('../src/updates-windows.js', import.meta.url).href, installation, dataHome, helper], {
-    cwd: directory, env: { ...process.env, MARLIN_HOME: dataHome }, windowsHide: true,
-    timeout: 60_000,
-  });
+  try {
+    await run(join(installation, 'node', 'node.exe'), [runner,
+      new URL('../src/updates-windows.js', import.meta.url).href, installation, dataHome, helper], {
+      cwd: directory, env: { ...process.env, MARLIN_HOME: dataHome }, windowsHide: true,
+      timeout: 60_000,
+    });
+  } catch (error) {
+    const diagnostics = await Promise.all(['update.log', 'update-result.json', 'handoff.json'].map(async (file) =>
+      `${file}: ${await readFile(join(dataHome, file), 'utf8').catch((failure) => failure.code)}`));
+    throw new Error(`${error.message}\n${diagnostics.join('\n')}`, { cause: error });
+  }
   const handoff = JSON.parse(await readFile(join(dataHome, 'handoff.json'), 'utf8'));
   assert.equal(handoff.result.event, 'restarting');
   assert.ok(handoff.events.some((event) => event.event === 'progress' && event.percent === 100));
