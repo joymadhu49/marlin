@@ -58,7 +58,7 @@ function startHelper(f, extra = [], options = {}) {
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', f.helper,
     '-InstallDir', f.install, '-StagedDir', f.stage, '-ReadyFile', f.ready, '-LogPath', f.log,
     ...(!extra.includes('-WaitTimeoutSeconds') ? ['-WaitTimeoutSeconds', '10'] : []),
-    '-RestartTimeoutSeconds', '10', ...extra,
+    ...(!extra.includes('-RestartTimeoutSeconds') ? ['-RestartTimeoutSeconds', '10'] : []), ...extra,
   ], { env: { ...process.env, MARLIN_HOME: f.data, SMOKE_RESTART_LOG: join(f.data, 'restarts.log'), ...options.env }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   f.children.push(child);
   let output = '';
@@ -187,4 +187,35 @@ native('helper rejects unrelated PIDs and data paths inside the installation', a
   assert.match(nested.output, /outside replaced packages/);
   assert.equal(readFileSync(join(nestedData, 'keep.txt'), 'utf8'), 'preserve');
   assert.equal(version(f.install), '0.3.0');
+});
+
+// A restart timeout is not proof that the new app failed: never move its files
+// out from under an active process in an attempt to roll back.
+native('restart timeout retains the active installation and its rollback backup', async t => {
+  const f = fixture(t);
+  const pidFile = join(f.data, 'active-launcher.pid');
+  writeFileSync(join(f.stage, 'src', 'cli.js'), `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));setInterval(()=>{},1000);`);
+  const run = startHelper(f, ['-RestartTimeoutSeconds', '1']);
+  let childPid;
+  try {
+    const ended = await run.done;
+    assert.equal(ended.code, 1, ended.output);
+    childPid = Number(readFileSync(pidFile, 'utf8'));
+    assert.ok(childPid > 0);
+    process.kill(childPid, 0);
+    assert.equal(version(f.install), '0.3.1');
+    assert.equal(existsSync(f.stage), false);
+    assert.ok(readdirSync(f.root).some(name => name.startsWith('.marlin-backup-')));
+    assert.match(readFileSync(f.log, 'utf8'), /left untouched/);
+    assert.equal(result(f).event, 'error');
+  } finally {
+    if (!childPid && existsSync(pidFile)) childPid = Number(readFileSync(pidFile, 'utf8'));
+    if (childPid) {
+      try { process.kill(childPid); } catch {}
+      for (let attempt = 0; attempt < 50; attempt++) {
+        try { process.kill(childPid, 0); } catch { break }
+        await pause(100);
+      }
+    }
+  }
 });

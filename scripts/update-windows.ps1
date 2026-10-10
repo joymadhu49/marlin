@@ -118,6 +118,7 @@ try {
     }
     $workspace = [IO.Path]::GetDirectoryName($helper)
     if (!(SamePath ([IO.Path]::GetDirectoryName($workspace)) $parent) -or [IO.Path]::GetFileName($workspace) -notlike '.marlin-update-*') { throw 'Detached helper must be inside a .marlin-update-* sibling workspace.' }
+    if ((Get-Item -LiteralPath $workspace -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Detached helper workspace must not be a junction or symbolic link.' }
     if (!(SamePath ([IO.Path]::GetDirectoryName($ReadyFile)) $workspace)) { throw 'ReadyFile must be next to the detached helper.' }
     if (!(SamePath ([IO.Path]::GetDirectoryName($LogPath)) $dataHome)) { throw 'LogPath must be inside the external Marlin data directory.' }
     if ($LockPath) {
