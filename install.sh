@@ -4,6 +4,7 @@
 #   bash install.sh --agents   only (re)wire agents to an already installed app
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT/scripts/build-common.sh"
 APP=/Applications/Marlin.app
 NODE="$APP/Contents/Resources/node/bin/node"
 CLI="$APP/Contents/Resources/app/src/cli.js"
@@ -11,10 +12,10 @@ SKILL_SRC="$APP/Contents/Resources/app/skills/marlin-browser"
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 
 if [ "${1:-}" != "--agents" ]; then
-  command -v node >/dev/null || { echo "Node 20+ is required (brew install node)"; exit 1; }
+  require_build_tools
   say "Installing dependencies"
   cd "$ROOT"
-  if command -v pnpm >/dev/null; then pnpm install --silent; else npm install --silent; fi
+  install_dependencies development
   if [ ! -x "$ROOT/chromium/chrome-mac/Chromium.app/Contents/MacOS/Chromium" ]; then
     say "Downloading Chromium"
     node src/cli.js fetch-chromium
