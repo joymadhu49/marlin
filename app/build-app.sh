@@ -12,13 +12,14 @@ SRC_APP="$ROOT/chromium/chrome-mac/Chromium.app"
 OUT="$ROOT/dist/Marlin.app"
 SPARKLE="$ROOT/vendor/sparkle"
 FEED_URL="https://github.com/joymadhu49/marlin/releases/latest/download/appcast.xml"
-SU_PUBLIC_KEY="Vzdd6fx46YsZwt3iKavazKGu95aBqMUf3rwglxS/JtI="
+SU_PUBLIC_KEY="$MARLIN_SPARKLE_PUBLIC_KEY"
 [ -d "$SRC_APP" ] || { echo "Run: node src/cli.js fetch-chromium"; exit 1; }
+require_macos_arm64 "$SRC_APP/Contents/MacOS/Chromium"
 [ -d "$SPARKLE/Sparkle.framework" ] || bash "$ROOT/scripts/fetch-sparkle.sh"
 
 VERSION="$(node -p "require('$ROOT/package.json').version")"
 # Sparkle compares CFBundleVersion: 0.2.0 -> 200, 1.4.12 -> 10412.
-BUILD="$(node -p "'$VERSION'.split('.').reduce((n, x, i) => n + Number(x) * [10000, 100, 1][i], 0)")"
+BUILD="$(macos_build_number "$VERSION")"
 
 rm -rf "$OUT" "$ROOT/dist/build" && mkdir -p "$ROOT/dist/build"
 cp -R "$SRC_APP" "$OUT"
@@ -60,7 +61,7 @@ H="$C/Helpers/Marlin Updater.app/Contents"
 mkdir -p "$H/MacOS" "$H/Frameworks"
 swiftc -O -target arm64-apple-macos13 -F "$SPARKLE" -framework Sparkle \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  "$ROOT/updater/main.swift" -o "$H/MacOS/Marlin Updater"
+  "$ROOT/updater/Paths.swift" "$ROOT/updater/main.swift" -o "$H/MacOS/Marlin Updater"
 cp -R "$SPARKLE/Sparkle.framework" "$H/Frameworks/"
 cat > "$H/Info.plist" <<PL
 <?xml version="1.0" encoding="UTF-8"?>

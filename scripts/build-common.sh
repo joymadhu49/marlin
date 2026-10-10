@@ -1,6 +1,39 @@
 #!/bin/bash
 # Shared dependency selection and preflight for the macOS source installer.
 
+# Existing installations trust this key. Never generate or substitute a key at release time.
+MARLIN_SPARKLE_PUBLIC_KEY="Vzdd6fx46YsZwt3iKavazKGu95aBqMUf3rwglxS/JtI="
+
+macos_build_number() {
+  node -e '
+    const version = process.argv[1];
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
+      console.error("The macOS Sparkle release requires a stable major.minor.patch version.");
+      process.exit(1);
+    }
+    const [major, minor, patch] = version.split(".").map(Number);
+    const build = major * 10000 + minor * 100 + patch;
+    if (minor >= 100 || patch >= 100 || !Number.isSafeInteger(build)) {
+      console.error("The macOS build number requires minor and patch below 100.");
+      process.exit(1);
+    }
+    console.log(build);
+  ' "$1"
+}
+
+require_macos_arm64() {
+  [ "$(node -p process.arch)" = arm64 ] || {
+    echo "This Marlin.app build supports Apple Silicon only; use an arm64 Node runtime." >&2
+    return 1
+  }
+  local executable="$1" architectures
+  architectures="$(/usr/bin/lipo -archs "$executable")" || return 1
+  case " $architectures " in
+    *' arm64 '*) ;;
+    *) echo "Chromium must contain an arm64 executable for this Apple Silicon build." >&2; return 1 ;;
+  esac
+}
+
 require_build_tools() {
   if [ "$(uname -s)" != Darwin ]; then
     echo "The Marlin.app source build requires macOS." >&2

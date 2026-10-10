@@ -39,8 +39,7 @@ func describe(_ item: SUAppcastItem) -> [String: Any] {
 
 /// Asks the Marlin daemon to close Chromium so Sparkle can replace the bundle.
 func stopMarlin() {
-    let state = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Marlin/state.json")
+    let state = marlinStateURL()
     guard let data = try? Data(contentsOf: state),
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let port = json["port"] as? Int, let token = json["token"] as? String,
