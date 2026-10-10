@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
 import { EventEmitter } from 'node:events';
+import { join } from 'node:path';
+const lockPath = join('/test', 'starting.lock');
 let operations, health, open, stat, spawnImpl;
 const errno = (code) => Object.assign(new Error(code), { code });
 mock.module('../src/paths.js', { namedExports: {
@@ -52,14 +54,14 @@ test('parent closes launch log descriptor after successful spawn', async () => {
   setup();
   await ensureDaemon({ headless: true });
   assert.ok(operations.some(([op, fd]) => op === 'close' && fd === 20));
-  assert.ok(operations.some(([op, path]) => op === 'remove' && path === '/test/starting.lock'));
+  assert.ok(operations.some(([op, path]) => op === 'remove' && path === lockPath));
 });
 test('synchronous spawn failure closes log descriptor and releases lock', async () => {
   setup();
   spawnImpl = () => { throw errno('EAGAIN'); };
   await assert.rejects(ensureDaemon(), { code: 'EAGAIN' });
   assert.ok(operations.some(([op, fd]) => op === 'close' && fd === 20));
-  assert.ok(operations.some(([op, path]) => op === 'remove' && path === '/test/starting.lock'));
+  assert.ok(operations.some(([op, path]) => op === 'remove' && path === lockPath));
 });
 test('asynchronous spawn failure is reported and resources are released', async () => {
   setup();
@@ -71,7 +73,7 @@ test('asynchronous spawn failure is reported and resources are released', async 
   };
   await assert.rejects(ensureDaemon(), { code: 'ENOENT' });
   assert.ok(operations.some(([op, fd]) => op === 'close' && fd === 20));
-  assert.ok(operations.some(([op, path]) => op === 'remove' && path === '/test/starting.lock'));
+  assert.ok(operations.some(([op, path]) => op === 'remove' && path === lockPath));
 });
 test('another launcher becoming healthy does not spawn a duplicate', async () => {
   setup();
