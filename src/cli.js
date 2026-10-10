@@ -124,7 +124,7 @@ async function main() {
       const { runUpdater, canUpdate } = await import('./updates.js');
       if (!canUpdate()) {
         if (process.platform === 'win32') {
-          console.log('In-browser Windows updates require the packaged x64 release and its bundled runtime. Start it with marlin.cmd.');
+          console.log('In-browser Windows updates require a packaged Windows release and its bundled runtime. Start it with marlin.cmd.');
           console.log('Download the Windows release from https://github.com/joymadhu49/marlin/releases. Development checkouts update with git pull.');
           return;
         }
