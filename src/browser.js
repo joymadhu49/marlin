@@ -191,7 +191,7 @@ export class MarlinBrowser extends EventEmitter {
     }
   }
 
-  /** Chromium's About page has no updater; show Marlin's, which checks through Sparkle. */
+  /** Chromium's About page has no updater; show Marlin's platform updater. */
   async #redirectAbout(t) {
     if (!/^chrome:\/\/(settings\/help|help)\b/.test(t.url()) || !this.builtinId) return;
     const page = await t.page().catch(() => null);

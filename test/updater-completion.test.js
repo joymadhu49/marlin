@@ -9,7 +9,8 @@ mock.module('node:child_process', { namedExports: {
 } });
 mock.module('node:fs', { namedExports: { existsSync: () => true } });
 mock.module('../src/paths.js', { namedExports: { ROOT: process.cwd() } });
-const { runUpdater } = await import('../src/updates.js');
+mock.module('../src/updates-windows.js', { namedExports: { canUpdateWindows: () => false, runWindowsUpdater: async () => {} } });
+const { runMacUpdater: runUpdater } = await import('../src/updates.js');
 after(() => mock.restoreAll());
 
 async function close(code, signal = null) {

@@ -9,6 +9,7 @@ import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -134,6 +135,13 @@ try {
     const generated = JSON.parse(readFileSync(join(home, 'mcp-config.json'), 'utf8')).mcpServers.marlin;
     assert.equal(resolve(generated.command), bundledNode);
     assert.deepEqual(generated.args, [cli, 'mcp']);
+  });
+
+  await step('bundled runtime enables the Windows browser updater', async () => {
+    const moduleUrl = pathToFileURL(join(appRoot, 'src', 'updates.js')).href;
+    const code = `const {canUpdate} = await import(${JSON.stringify(moduleUrl)}); if (!canUpdate()) throw new Error('Packaged Windows updater unavailable');`;
+    await exec(bundledNode, ['--input-type=module', '-e', code], { env, cwd: home, windowsHide: true, timeout: 20_000 });
+    assert.ok(existsSync(join(appRoot, 'scripts', 'update-windows.ps1')));
   });
 
   await step('marlin.cmd works from a package path and argument containing spaces', async () => {

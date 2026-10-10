@@ -52,17 +52,26 @@ export async function startDaemon({ headless } = {}) {
 
   // Updates live in the browser UI: a quiet check after the human opens Marlin.
   let update = { event: 'idle' };
+  let updateBusy = false;
   const onUpdate = (e) => { update = { ...update, ...e }; broadcast({ type: 'update_status', ...update }); };
   async function checkUpdate() {
-    if (['checking', 'downloading', 'progress', 'extracting', 'installing', 'restarting'].includes(update.event)) return;
+    if (updateBusy) return;
+    updateBusy = true;
     update = { event: 'checking' };
     broadcast({ type: 'update_status', ...update });
-    await runUpdater('check', onUpdate);
+    try { await runUpdater('check', onUpdate); }
+    catch (error) { onUpdate({ event: 'error', message: error.message }); }
+    finally { updateBusy = false; }
   }
-  function installUpdate() {
+  async function installUpdate() {
+    if (updateBusy) return;
+    updateBusy = true;
     update = { ...update, event: 'downloading', percent: 0 };
     broadcast({ type: 'update_status', ...update });
-    runUpdater('install', onUpdate);
+    try {
+      await runUpdater('install', onUpdate, { shutdown, browserPid: mb.browser?.process?.()?.pid });
+    } catch (error) { onUpdate({ event: 'error', message: error.message }); }
+    finally { updateBusy = false; }
   }
   if (!config.headless && canUpdate()) setTimeout(checkUpdate, 8000);
 

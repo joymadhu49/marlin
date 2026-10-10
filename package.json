@@ -1,6 +1,6 @@
 {
   "name": "marlin",
-  "version": "0.3.0-windows.1",
+  "version": "0.3.0-windows.2",
   "private": true,
   "description": "Chromium browser built for AI agents: extensions, wallets, screenshots, MCP.",
   "type": "module",

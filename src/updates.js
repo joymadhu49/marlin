@@ -1,21 +1,25 @@
-// In-browser updates. Sparkle (inside the Marlin Updater helper) does the
-// download, EdDSA verification and install; Marlin's own pages show it.
+// Both platform updaters report progress through the same browser controls.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { ROOT } from './paths.js';
+import { canUpdateWindows, runWindowsUpdater } from './updates-windows.js';
 
 export const helperPath = join(ROOT, '..', '..', 'Helpers', 'Marlin Updater.app', 'Contents', 'MacOS', 'Marlin Updater');
-export const canUpdate = () => existsSync(helperPath);
+export const canUpdate = () => process.platform === 'win32' ? canUpdateWindows() : existsSync(helperPath);
+
+export function runUpdater(mode, onEvent = () => {}, options = {}) {
+  return process.platform === 'win32'
+    ? runWindowsUpdater(mode, onEvent, options)
+    : runMacUpdater(mode, onEvent);
+}
 
 /** Runs the helper in a JSON mode and calls onEvent for each line. Resolves with the last event. */
-export function runUpdater(mode, onEvent = () => {}) {
+export function runMacUpdater(mode, onEvent = () => {}) {
   return new Promise((resolve) => {
-    if (!canUpdate()) {
-      const e = { event: 'error', message: process.platform === 'win32'
-        ? 'Windows updates are manual. Download a Windows package from https://github.com/joymadhu49/marlin/releases.'
-        : 'This is a development build. Update it with git pull and install.sh.' };
+    if (!existsSync(helperPath)) {
+      const e = { event: 'error', message: 'This is a development build. Update it with git pull and install.sh.' };
       onEvent(e);
       return resolve(e);
     }
