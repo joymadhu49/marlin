@@ -13,7 +13,20 @@ const current = '0.3.0-windows.1', newer = '0.3.0-windows.2';
 const payload = Buffer.from('fixture archive contents');
 const hash = createHash('sha256').update(payload).digest('hex');
 const required = ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
-  'extension/manifest.json', 'scripts/update-windows.ps1', 'node_modules/puppeteer-core/package.json'];
+  'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json'];
+function bootstrapChild(state, { code = 0, output = '{"pid":123456}' } = {}) {
+  const child = new EventEmitter();
+  child.pid = 654321;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = () => { state.killed = true; };
+  queueMicrotask(() => {
+    child.emit('spawn');
+    child.stdout.emit('data', output);
+    child.emit('close', code);
+  });
+  return child;
+}
 async function packageAt(root, version) {
   for (const file of required) {
     const path = join(root, ...file.split('/'));
@@ -54,20 +67,18 @@ async function fixture(t) {
     spawnImpl: (command, args, spawnOptions) => {
       state.spawned = true;
       state.command = command; state.args = args; state.spawnOptions = spawnOptions;
-      const child = new EventEmitter();
-      child.pid = 123456;
-      child.unref = () => {};
-      child.kill = () => { state.killed = true; };
-      queueMicrotask(() => child.emit('spawn'));
+      const child = bootstrapChild(state);
       // The helper only acknowledges once JS has transferred lock ownership.
       setTimeout(async () => {
-        const get = (flag) => args[args.indexOf(flag) + 1];
+        const request = JSON.parse(await readFile(args[args.indexOf('-RequestFile') + 1], 'utf8'));
+        state.request = request;
+        const get = (flag) => request.arguments[request.arguments.indexOf(flag) + 1];
         if (state.killed) return;
         const lock = JSON.parse(await readFile(get('-LockPath'), 'utf8'));
-        assert.equal(lock.pid, child.pid);
+        assert.equal(lock.pid, 123456);
         assert.equal(state.shutdown, false);
         state.ready = true;
-        await writeFile(get('-ReadyFile'), JSON.stringify({ ready: true, pid: child.pid }));
+        await writeFile(get('-ReadyFile'), JSON.stringify({ ready: true, pid: state.ackPid ?? 123456 }));
       }, 20);
       return child;
     },
@@ -210,17 +221,12 @@ test('already-cancelled update does not download or shut down', async (t) => {
   assert.equal(f.state.shutdown, false);
 });
 
-test('readiness timeout kills helper and never shuts down running app', async (t) => {
+test('readiness timeout revokes helper ownership and never shuts down running app', async (t) => {
   const f = await fixture(t);
   f.options.readyTimeoutMs = 10;
-  f.options.spawnImpl = () => {
-    const child = new EventEmitter();
-    child.pid = 123456; child.unref = () => {}; child.kill = () => { f.state.killed = true; };
-    queueMicrotask(() => child.emit('spawn'));
-    return child;
-  };
+  f.options.spawnImpl = () => bootstrapChild(f.state);
   assert.match((await f.run()).message, /readiness timed out/);
-  assert.equal(f.state.killed, true);
+  assert.equal(f.state.killed, false);
   assert.equal(f.state.shutdown, false);
   assert.equal(existsSync(f.lockPath), false);
   assert.deepEqual((await readdir(f.parent)).sort(), ['Marlin', 'profile']);
@@ -232,14 +238,14 @@ test('verified package hands off only after matching helper readiness acknowledg
   assert.deepEqual(await f.run(), { event: 'restarting', version: newer });
   assert.equal(f.state.shutdown, true);
   assert.equal(f.state.killed, false);
-  assert.equal(f.state.command, 'powershell.exe');
-  assert.equal(f.state.spawnOptions.detached, true);
+  assert.match(f.state.command, /\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i);
+  assert.equal(f.state.spawnOptions.detached, false);
   assert.equal(f.state.spawnOptions.windowsHide, true);
   assert.equal(f.state.spawnOptions.env.MARLIN_HOME, realpathSync(f.dataHome));
-  const get = (flag) => f.state.args[f.state.args.indexOf(flag) + 1];
+  const get = (flag) => f.state.request.arguments[f.state.request.arguments.indexOf(flag) + 1];
   assert.equal(get('-BrowserPid'), '98765');
   assert.equal(dirname(get('-StagedDir')), realpathSync(f.parent));
-  assert.equal(dirname(dirname(get('-File'))), f.state.spawnOptions.cwd);
+  assert.equal(dirname(dirname(f.state.request.helper)), f.state.spawnOptions.cwd);
   assert.equal(f.state.spawnOptions.cwd, realpathSync(f.parent));
   assert.equal(JSON.parse(await readFile(get('-LockPath'), 'utf8')).pid, 123456);
   assert.ok(f.state.events.find((e) => e.event === 'progress' && e.percent === 100));
@@ -260,32 +266,25 @@ test('dead updater lock is recovered and removed when no update exists', async (
   assert.equal(existsSync(f.lockPath), false);
 });
 
-test('cancellation during readiness kills helper without shutting down browser', async (t) => {
+test('cancellation during readiness revokes helper ownership without shutting down browser', async (t) => {
   const f = await fixture(t);
   const controller = new AbortController();
   f.options.signal = controller.signal;
   f.options.spawnImpl = () => {
-    const child = new EventEmitter();
-    child.pid = 123456; child.unref = () => {}; child.kill = () => { f.state.killed = true; };
-    queueMicrotask(() => child.emit('spawn'));
+    const child = bootstrapChild(f.state);
     setTimeout(() => controller.abort(new Error('Cancelled during handoff')), 10);
     return child;
   };
   assert.equal((await f.run()).event, 'error');
-  assert.equal(f.state.killed, true);
+  assert.equal(f.state.killed, false);
   assert.equal(f.state.shutdown, false);
   assert.equal(existsSync(f.lockPath), false);
 });
 
-test('early helper exit fails without requesting application shutdown', async (t) => {
+test('bootstrap failure prevents handoff and application shutdown', async (t) => {
   const f = await fixture(t);
-  f.options.spawnImpl = () => {
-    const child = new EventEmitter();
-    child.pid = 123456; child.unref = () => {}; child.kill = () => {};
-    queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 1); });
-    return child;
-  };
-  assert.match((await f.run()).message, /exited before handoff/);
+  f.options.spawnImpl = () => bootstrapChild(f.state, { code: 1 });
+  assert.match((await f.run()).message, /bootstrap failed/);
   assert.equal(f.state.shutdown, false);
 });
 
@@ -297,4 +296,21 @@ test('installation lock prevents a second updater even with a different profile 
   assert.match((await f.run()).message, /already running/);
   assert.equal(await readFile(f.lockPath, 'utf8'), owner);
   assert.equal(f.state.requested.length, 0);
+});
+
+test('invalid bootstrap PID output fails closed before shutdown', async (t) => {
+  const f = await fixture(t);
+  f.options.spawnImpl = () => bootstrapChild(f.state, { output: '{"pid":0}' });
+  assert.match((await f.run()).message, /valid helper PID/);
+  assert.equal(f.state.shutdown, false);
+  assert.equal(existsSync(f.lockPath), false);
+});
+
+test('bootstrap PID cannot substitute for the independent helper readiness PID', async (t) => {
+  const f = await fixture(t);
+  f.options.readyTimeoutMs = 80;
+  f.state.ackPid = 654321;
+  assert.match((await f.run()).message, /readiness timed out/);
+  assert.equal(f.state.shutdown, false);
+  assert.equal(existsSync(f.lockPath), false);
 });

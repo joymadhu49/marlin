@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ROOT, paths } from './paths.js';
 import { extractZip } from './archive.js';
@@ -146,7 +146,7 @@ async function releaseLock(file, token) {
 }
 function validatePackage(stage, version) {
   const required = ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
-    'extension/manifest.json', 'scripts/update-windows.ps1', 'node_modules/puppeteer-core/package.json'];
+    'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json'];
   if (!lstatSync(stage).isDirectory()) throw new Error('Windows update package root is invalid.');
   const root = realpathSync(stage);
   for (const file of ['package.json', ...required]) {
@@ -210,7 +210,9 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     if (!release) { emit({ event: 'none' }); return last; }
     emit({ event: 'available', version: release.version, notes: release.notes, size: release.archive.size });
     if (mode === 'check') return last;
-    if (!regularFile(join(install, 'scripts', 'update-windows.ps1'))) throw new Error('The Windows update helper is missing.');
+    for (const script of ['update-windows.ps1', 'start-windows-updater.ps1']) {
+      if (!regularFile(join(install, 'scripts', script))) throw new Error(`The Windows update helper ${script} is missing.`);
+    }
     workspace = await mkdtemp(join(dirname(install), '.marlin-update-'));
     const archive = join(workspace, release.name);
     emit({ event: 'downloading', version: release.version, percent: 0 });
@@ -226,34 +228,53 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     await rename(packageRoot, staged);
     const helper = join(workspace, 'update-windows.ps1');
     await copyFile(join(install, 'scripts', 'update-windows.ps1'), helper);
+    const bootstrap = join(workspace, 'start-windows-updater.ps1');
+    await copyFile(join(install, 'scripts', 'start-windows-updater.ps1'), bootstrap);
     const ready = join(workspace, 'ready.json');
     const deadline = Date.now() + readyTimeoutMs;
-    const args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
-      '-InstallDir', install, '-StagedDir', staged, '-DaemonPid', String(process.pid),
+    const args = ['-InstallDir', install, '-StagedDir', staged, '-DaemonPid', String(process.pid),
       '-ReadyFile', ready, '-LogPath', join(home, 'update.log'), '-LockPath', lock,
       '-ReadyDeadlineUtc', new Date(deadline).toISOString()];
     if (Number.isSafeInteger(browserPid) && browserPid > 0) args.push('-BrowserPid', String(browserPid));
+    const requestFile = join(workspace, 'launch.json');
+    await writeFile(requestFile, JSON.stringify({ helper, arguments: args, workingDirectory: dirname(install) }));
     signal.throwIfAborted();
     emit({ event: 'installing' });
-    child = spawnImpl('powershell.exe', args, {
-      detached: true, windowsHide: true, stdio: 'ignore', cwd: dirname(install),
+    // A detached PowerShell process can exit before executing any script because
+    // libuv removes its console. A short-lived, attached bootstrap uses Windows
+    // Start-Process to create an independent helper, and returns that helper PID.
+    const powershell = win32.join(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    child = spawnImpl(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', bootstrap, '-RequestFile', requestFile], {
+      detached: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: dirname(install),
       env: { ...process.env, MARLIN_HOME: home },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(readyTimeoutMs)]),
     });
-    let failure;
-    child.on('error', (error) => { failure = error; });
-    child.on('exit', (code) => { failure = new Error(`Windows updater exited before handoff (${code}). See ${join(home, 'update.log')}`); });
-    await new Promise((resolveSpawn, reject) => { child.once('spawn', resolveSpawn); child.once('error', reject); });
-    if (!Number.isSafeInteger(child.pid) || child.pid <= 0) throw new Error('Windows updater did not report a process ID.');
-    await writeFile(lock, JSON.stringify({ pid: child.pid, token }));
-    child.unref();
+    const helperPid = await new Promise((resolveStarted, reject) => {
+      let stdout = '', stderr = '';
+      child.stdout.on('data', (data) => {
+        stdout += data;
+        if (stdout.length > 16_384) { child.kill(); reject(new Error('Windows updater bootstrap returned excessive output.')); }
+      });
+      child.stderr.on('data', (data) => { stderr = (stderr + data).slice(-65_536); });
+      child.once('error', reject);
+      child.once('close', (code) => {
+        if (code !== 0) return reject(new Error(`Windows updater bootstrap failed (${code}): ${stderr.trim()}`));
+        try {
+          const result = JSON.parse(stdout.trim());
+          if (!Number.isSafeInteger(result.pid) || result.pid <= 0) throw new Error('missing helper PID');
+          resolveStarted(result.pid);
+        } catch { reject(new Error('Windows updater bootstrap did not return a valid helper PID.')); }
+      });
+    });
+    child = null; // The bootstrap has exited; the independent helper owns its lifecycle.
+    await writeFile(lock, JSON.stringify({ pid: helperPid, token }));
     while (true) {
       signal.throwIfAborted();
-      if (failure) throw failure;
       const acknowledgement = await readFile(ready, 'utf8').then(JSON.parse).catch((error) => {
         if (error.code === 'ENOENT' || error instanceof SyntaxError) return null;
         throw error;
       });
-      if (acknowledgement?.ready === true && acknowledgement.pid === child.pid) break;
+      if (acknowledgement?.ready === true && acknowledgement.pid === helperPid) break;
       if (Date.now() >= deadline) throw new Error(`Windows updater readiness timed out. See ${join(home, 'update.log')}`);
       await delay(50, undefined, { signal });
     }
@@ -266,10 +287,11 @@ export async function runWindowsUpdater(mode, onEvent = () => {}, options = {}) 
     return last;
   } finally {
     if (!handedOff) {
+      // Removing ownership cancels the helper before it can replace anything.
+      if (ownsLock) await releaseLock(lock, token).catch(() => {});
       if (child) { try { child.kill(); } catch {} }
       if (staged) await rm(staged, { recursive: true, force: true }).catch(() => {});
       if (workspace) await rm(workspace, { recursive: true, force: true }).catch(() => {});
-      if (ownsLock) await releaseLock(lock, token).catch(() => {});
     }
   }
 }

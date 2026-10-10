@@ -46,11 +46,12 @@ const result = await runWindowsUpdater('install', (event) => events.push(event),
   extract: async (_, destination) => {
     const stage = join(destination, 'Marlin-win32-x64');
     for (const file of ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
-      'extension/manifest.json', 'scripts/update-windows.ps1', 'node_modules/puppeteer-core/package.json']) {
+      'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json']) {
       const target = join(stage, ...file.split('/'));
       await mkdir(dirname(target), { recursive: true });
       if (file === 'node/node.exe') await copyFile(process.execPath, target);
       else if (file === 'scripts/update-windows.ps1') await copyFile(helperSource, target);
+      else if (file === 'scripts/start-windows-updater.ps1') await copyFile(join(dirname(helperSource), 'start-windows-updater.ps1'), target);
       else await writeFile(target, file === 'src/cli.js' ? launcher : 'fixture');
     }
     await writeFile(join(stage, 'package.json'), JSON.stringify({ name: 'marlin', version, type: 'module' }));
@@ -74,11 +75,12 @@ test('Windows updater verifies, hands off, replaces and relaunches while preserv
   await writeFile(join(dataHome, 'profile-marker'), 'keep this profile');
   const helper = join(root, 'scripts', 'update-windows.ps1');
   for (const file of ['node/node.exe', 'marlin.cmd', 'src/cli.js', 'chromium/chrome-win/chrome.exe',
-    'extension/manifest.json', 'scripts/update-windows.ps1', 'node_modules/puppeteer-core/package.json']) {
+    'extension/manifest.json', 'scripts/update-windows.ps1', 'scripts/start-windows-updater.ps1', 'node_modules/puppeteer-core/package.json']) {
     const destination = join(installation, ...file.split('/'));
     await mkdir(dirname(destination), { recursive: true });
     if (file === 'node/node.exe') await copyFile(process.execPath, destination);
     else if (file === 'scripts/update-windows.ps1') await copyFile(helper, destination);
+    else if (file === 'scripts/start-windows-updater.ps1') await copyFile(join(dirname(helper), 'start-windows-updater.ps1'), destination);
     else await writeFile(destination, file === 'src/cli.js' ? 'process.exitCode = 0;' : 'fixture');
   }
   await writeFile(join(installation, 'package.json'), JSON.stringify({ name: 'marlin', version: beforeVersion, type: 'module' }));
