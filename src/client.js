@@ -15,21 +15,33 @@ export async function daemonUp() {
 }
 
 export async function ensureDaemon({ headless } = {}) {
-  if (await daemonUp()) return;
   // Several agents may make their first call at once: only one may launch.
   const lock = join(paths.home, 'starting.lock');
-  let owner = false;
-  try {
-    closeSync(openSync(lock, 'wx'));
-    owner = true;
-  } catch {
-    if (Date.now() - statSync(lock).mtimeMs > 60_000) { rmSync(lock, { force: true }); return ensureDaemon({ headless }); }
+  for (let i = 0; i < 120; i++) {
+    if (await daemonUp()) return;
+    let fd;
+    try {
+      fd = openSync(lock, 'wx');
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let stat;
+      try { stat = statSync(lock); }
+      catch (error) {
+        // The other launcher may have finished between open and stat.
+        if (error.code === 'ENOENT') continue;
+        throw error;
+      }
+      if (Date.now() - stat.mtimeMs > 60_000) { rmSync(lock, { force: true }); continue; }
+      await sleep(250);
+      continue;
+    }
+    try {
+      closeSync(fd);
+      await launch(headless);
+      return;
+    } finally { rmSync(lock, { force: true }); }
   }
-  if (!owner) {
-    for (let i = 0; i < 120; i++) { await sleep(250); if (await daemonUp()) return; }
-    throw new Error(`Marlin did not start. See ${paths.log}`);
-  }
-  try { await launch(headless); } finally { rmSync(lock, { force: true }); }
+  throw new Error(`Marlin did not start. See ${paths.log}`);
 }
 
 async function launch(headless) {
@@ -37,7 +49,17 @@ async function launch(headless) {
   const out = openSync(paths.log, 'a');
   const args = [join(ROOT, 'src', 'cli.js'), 'start'];
   if (headless) args.push('--headless');
-  spawn(process.execPath, args, { detached: true, stdio: ['ignore', out, out] }).unref();
+  try {
+    const child = spawn(process.execPath, args, { detached: true, stdio: ['ignore', out, out] });
+    await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('spawn', resolve);
+      child.unref();
+    });
+  } finally {
+    // The child has its own inherited descriptors; the parent must close its copy.
+    closeSync(out);
+  }
   for (let i = 0; i < 80; i++) {
     await sleep(250);
     if (await daemonUp()) return;
