@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +64,7 @@ assert.equal(result.event, 'restarting', result.message);
 test('Windows updater verifies, hands off, replaces and relaunches while preserving profile', {
   skip: process.platform !== 'win32', timeout: 120_000,
 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'marlin updater flow '));
+  const directory = realpathSync.native(await mkdtemp(join(tmpdir(), 'marlin updater flow ')));
   t.after(() => rm(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
   const installation = join(directory, 'Installed Marlin');
   const dataHome = join(directory, 'User Data');
