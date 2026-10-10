@@ -31,7 +31,7 @@ process.exit(${fail ? 7 : 0});
 }
 function fixture(t, options = {}) {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'marlin update [native]-')));
-  const f = { root, install: join(root, 'Marlin app [installed]'), stage: join(root, '.marlin-stage-fixture [new]'), workspace: join(root, '.marlin-update-fixture [helper]'), data: join(root, 'external profile [keep]'), children: [] };
+  const f = { root, install: join(root, 'Marlin app [installed]'), stage: join(root, '.marlin-stage-fixture [new]'), workspace: join(root, '.marlin-update-fixture [helper]'), data: join(root, 'external profile [keep]'), children: [], detached: [] };
   for (const path of [f.workspace, f.data]) mkdirSync(path);
   f.helper = join(f.workspace, 'update-windows.ps1');
   f.ready = join(f.workspace, 'ready.json');
@@ -42,6 +42,7 @@ function fixture(t, options = {}) {
   packageAt(f.stage, '0.3.1', options.failRestart);
   writeFileSync(join(f.data, 'wallet-profile.json'), '{"preserve":"user data"}');
   t.after(async () => {
+    for (const pid of f.detached) { try { process.kill(pid); } catch {} }
     for (const child of f.children) {
       if (child.exitCode === null && child.signalCode === null) {
         const stopped = once(child, 'exit');
@@ -222,4 +223,46 @@ native('restart timeout retains the active installation and its rollback backup'
       }
     }
   }
+});
+
+native('supported Start-Process bootstrap exits while its helper waits and completes independently', async t => {
+  const f = fixture(t);
+  const daemon = await holdPackageProcess(f);
+  const bootstrap = join(f.workspace, 'start-windows-updater.ps1');
+  const requestFile = join(f.workspace, 'launch request [literal].json');
+  copyFileSync(new URL('../scripts/start-windows-updater.ps1', import.meta.url), bootstrap);
+  writeFileSync(f.lock, JSON.stringify({ pid: process.pid }));
+  writeFileSync(requestFile, JSON.stringify({ helper: f.helper, workingDirectory: f.root, arguments: [
+    '-InstallDir', f.install, '-StagedDir', f.stage, '-ReadyFile', f.ready, '-LogPath', f.log,
+    '-LockPath', f.lock, '-DaemonPid', String(daemon.pid), '-NoRestart',
+    '-ReadyDeadlineUtc', new Date(Date.now() + 20_000).toISOString(),
+  ] }));
+  const bootstrapProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', bootstrap, '-RequestFile', requestFile], {
+    env: { ...process.env, MARLIN_HOME: f.data }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  f.children.push(bootstrapProcess);
+  let output = '', errors = '';
+  bootstrapProcess.stdout.on('data', chunk => { output += chunk; });
+  bootstrapProcess.stderr.on('data', chunk => { errors += chunk; });
+  const [code] = await once(bootstrapProcess, 'close');
+  assert.equal(code, 0, errors);
+  const helperPid = JSON.parse(output).pid;
+  assert.ok(Number.isSafeInteger(helperPid) && helperPid > 0);
+  f.detached.push(helperPid);
+  writeFileSync(f.lock, JSON.stringify({ pid: helperPid }));
+  const log = () => existsSync(f.log) ? readFileSync(f.log, 'utf8') : errors;
+  await ready(f, { child: { pid: helperPid, exitCode: null }, output: log });
+  assert.equal(version(f.install), '0.3.0', log());
+  assert.equal(bootstrapProcess.exitCode, 0);
+  process.kill(helperPid, 0);
+  await stop(daemon);
+  const deadline = Date.now() + 20_000;
+  while (existsSync(f.lock)) {
+    assert.ok(Date.now() < deadline, log());
+    await pause(100);
+  }
+  assert.equal(version(f.install), '0.3.1', log());
+  assert.equal(result(f).event, 'none', log());
+  assert.equal(existsSync(f.workspace), false, log());
+  f.detached.length = 0;
 });

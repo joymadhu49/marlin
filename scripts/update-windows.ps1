@@ -164,8 +164,18 @@ try {
     if (Test-Path -LiteralPath $ReadyFile) { throw 'Readiness file already exists.' }
     if ($ReadyDeadlineUtc -and [DateTime]::UtcNow -ge [DateTime]::Parse($ReadyDeadlineUtc).ToUniversalTime()) { throw 'Updater readiness deadline expired; no installation files were changed.' }
     if ($LockPath) {
-        $owner = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json
-        if ($owner.pid -ne $PID) { throw 'Updater lock ownership was lost before readiness.' }
+        # The supported Start-Process bootstrap returns our PID to JavaScript,
+        # which then transfers the lock. Wait briefly for that handoff.
+        $handoffDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        if ($ReadyDeadlineUtc) { $handoffDeadline = [DateTime]::Parse($ReadyDeadlineUtc).ToUniversalTime() }
+        while ($true) {
+            if (!(Test-Path -LiteralPath $LockPath -PathType Leaf)) { throw 'Updater lock disappeared before readiness.' }
+            $owned = $false
+            try { $owner = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json; $owned = $owner.pid -eq $PID } catch {}
+            if ($owned) { break }
+            if ([DateTime]::UtcNow -ge $handoffDeadline) { throw 'Updater lock ownership was not transferred before the readiness deadline.' }
+            Start-Sleep -Milliseconds 50
+        }
     }
     $readyTemp = $ReadyFile + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     [IO.File]::WriteAllText($readyTemp, (@{ ready = $true; pid = $PID; version = $newVersion } | ConvertTo-Json -Compress), $utf8)
@@ -182,6 +192,10 @@ try {
             throw ('Timed out waiting for Marlin processes: ' + ((@($busy | ForEach-Object { $_.ProcessId }) + @($activeWatched | ForEach-Object { $_.Id }) | Select-Object -Unique) -join ', ') + '. Close Marlin and MCP clients, then retry. No processes were killed.')
         }
         Start-Sleep -Milliseconds 250
+    }
+    if ($LockPath) {
+        $owner = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json
+        if ($owner.pid -ne $PID) { throw 'Updater lock ownership was lost; installation was not changed.' }
     }
     $waiting = $false
     $backup = Join-Path $parent ('.marlin-backup-' + [Guid]::NewGuid().ToString('N'))
