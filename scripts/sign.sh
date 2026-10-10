@@ -12,6 +12,9 @@ sign() { codesign --force --timestamp --options runtime --sign "$ID" "$@"; }
 while IFS= read -r f; do
   if file -b "$f" | grep -q 'Mach-O'; then
     case "$f" in
+      # Preserve these before signing the containing XPC bundle below. Once
+      # removed from its executable, bundle signing cannot recover them.
+      *Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/*) sign --preserve-metadata=entitlements "$f" ;;
       */Resources/node/bin/node) sign --entitlements "$ENT/jit.plist" "$f" ;;
       */Contents/MacOS/Chromium) sign --entitlements "$ENT/browser.plist" "$f" ;;
       *) sign "$f" ;;
