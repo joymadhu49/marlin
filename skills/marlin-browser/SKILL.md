@@ -1,6 +1,6 @@
 ---
 name: marlin-browser
-description: Drive Marlin, the Chromium browser built for AI agents, over MCP (tools named mcp__marlin__* / mcp_marlin_*) or the `marlin` CLI. Use it for any browser task that needs extensions or wallets (MetaMask, Rabby, Phantom...), installing Chrome Web Store extensions, opening extension popups, unlocking wallets with stored secrets, connecting dapps, approving signatures, screenshots of pages or extension UIs, or when Claude in Chrome / Playwright cannot reach extension pages. Also covers installing Marlin on a Mac.
+description: Drive Marlin, the Chromium browser built for AI agents, over MCP (tools named mcp__marlin__* / mcp_marlin_*) or the `marlin` CLI. Use it for any browser task that needs extensions or wallets (MetaMask, Rabby, Phantom...), installing Chrome Web Store extensions, opening extension popups, unlocking wallets with stored secrets, connecting dapps, approving signatures, screenshots of pages or extension UIs, or when Claude in Chrome / Playwright cannot reach extension pages. Also covers installing Marlin on macOS and the Windows x64 preview.
 ---
 
 # Marlin browser
@@ -65,7 +65,7 @@ Extensions persist in Marlin's profile across restarts. Humans can also click "A
 - The human stores one with `marlin secret set metamask` (hidden prompt) or in the sidebar Settings. Never ask the human to paste a password or seed phrase into chat.
 - Unlock: `unlock_extension {extension: "MetaMask", secret: "metamask"}`. For any other password field: `fill_secret {ref, name, submit?}`.
 - Wallets lock again when Marlin restarts. Unlock at the start of a wallet task.
-- Creating a new wallet: use `fill_secret` for both password fields, so the password comes from the Keychain. Skip "reveal recovery phrase" unless the human asks.
+- Creating a new wallet: use `fill_secret` for both password fields, so the password comes from the OS-protected store. Skip "reveal recovery phrase" unless the human asks.
 
 ## 5. Dapp flows (connect, sign in, sign, send)
 

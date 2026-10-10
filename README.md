@@ -42,7 +42,7 @@ Normal agent browsers break on extensions. Branded Chrome no longer loads unpack
 
 | Problem | Marlin |
 |---|---|
-| Installing store extensions | Downloads the CRX, verifies it, unpacks it with its public key so it keeps the real store ID, loads it over CDP `Extensions.loadUnpacked` |
+| Installing store extensions | Downloads the CRX, validates its structure, unpacks it with its public key so it keeps the real store ID, loads it over CDP `Extensions.loadUnpacked` |
 | Opening the toolbar popup | `Extensions.triggerAction` opens the real popup. When a wallet closes its popup and reopens as a tab, Marlin follows it |
 | Driving wallet UIs | Helper scripts run in an isolated world, so LavaMoat scuttling (MetaMask) does not break them |
 | Wallet requests in existing windows | Watches extension route changes (`/connect`, `/confirm-transaction`) and surfaces them as events and as the active tab |
@@ -70,7 +70,7 @@ marlin stop | status | version
 marlin update                  check for a new release
 marlin setup                   reconnect Claude Code, Codex and Hermes
 marlin install <id|url|path>   install an extension
-marlin secret set <name>       store a wallet password in the Keychain
+marlin secret set <name>       store a wallet password in the OS-protected store
 marlin config signPolicy smart|ask|allow
 marlin tools | tool <name> '<json>'
 ```
@@ -113,7 +113,7 @@ The server regression tests run without Chromium or Keychain access and were ver
 npm run test:server
 ```
 
-Browser integration checks require a downloaded Chromium binary:
+Run all browser-independent regressions:
 
 ```
 npm run test:unit       # browser-independent regressions; Node 22.22.3
@@ -141,7 +141,7 @@ node test/e2e.js        # 15 checks on a throwaway profile, headless
 node test/mcp-smoke.js  # spawns the MCP server like a client would
 ```
 
-Also verified by hand through the tools: MetaMask onboarding with a Keychain password, lock and unlock after restart, dapp `eth_requestAccounts` approval, and `personal_sign` through the approval guard, which returned a valid signature. Codex and Claude Code sessions each installed and drove Rabby over MCP.
+Previously verified by hand on macOS through the tools: MetaMask onboarding with a Keychain password, lock and unlock after restart, dapp `eth_requestAccounts` approval, and `personal_sign` through the approval guard, which returned a valid signature. Codex and Claude Code sessions each installed and drove Rabby over MCP.
 
 ## Limits
 
