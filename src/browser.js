@@ -302,7 +302,14 @@ export class MarlinBrowser extends EventEmitter {
 
   async goto(page, url) {
     let u = url.trim();
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = /\s/.test(u) || !u.includes('.') ? `https://duckduckgo.com/?q=${encodeURIComponent(u)}` : `https://${u}`;
+    // A numeric port on a bare host is not a URL scheme (localhost:3000).
+    const explicitScheme = /^(?:https?|about|data|file|javascript|mailto|tel|chrome|chrome-extension|devtools|view-source):/i.test(u);
+    const hostPort = !explicitScheme && /^(\[[a-f0-9:]+\]|[a-z0-9.-]+):\d+(?:[/?#]|$)/i.exec(u);
+    if (hostPort) {
+      const host = hostPort[1].toLowerCase();
+      const local = (!host.includes('.') && !host.startsWith('[')) || host === '[::1]' || host.endsWith('.localhost') || /^127\./.test(host);
+      u = `${local ? 'http' : 'https'}://${u}`;
+    } else if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = /\s/.test(u) || !u.includes('.') ? `https://duckduckgo.com/?q=${encodeURIComponent(u)}` : `https://${u}`;
     try {
       await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     } catch (e) {
