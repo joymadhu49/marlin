@@ -1,12 +1,12 @@
 # Windows release procedure
 
-Windows packages use `vX.Y.Z-windows.N` tags and a separate update channel. Keep the Windows release marked as a prerelease and `latest=false` so the macOS Sparkle URL at `releases/latest/download/appcast.xml` keeps working.
+Windows packages use `vX.Y.Z-windows.N` tags and a separate update channel. A Windows release is a full release but must stay `latest=false`: the macOS Sparkle URL at `releases/latest/download/appcast.xml` only works while the macOS release is GitHub's latest. The macOS release notes link to the current Windows packages, so publish Windows first when both ship together.
 
-1. Bump the shared stable base version in `package.json`, set the matching `MARLIN_WINDOWS_VERSION` (`X.Y.Z-windows.N`) in the Windows workflow, add changelog entries, and update `docs/windows-release-notes.md`. The Windows builder writes its channel version into each packaged `package.json`.
+1. Bump the shared stable base version in `package.json`, set the matching `MARLIN_WINDOWS_VERSION` (`X.Y.Z-windows.N`) in the Windows workflow, add changelog entries, and update `docs/windows-release-notes.md`. Keep its opening `<p>` and `<ul>` block: the About page of installed copies shows that paragraph and list as the update summary, and GitHub renders it as normal text. The publisher fills in `{{VERSION}}` and `{{DOWNLOAD}}`. The Windows builder writes its channel version into each packaged `package.json`.
 2. Open a PR. Both the platform regression matrix and all three Windows package jobs must pass for the same source commit. The latter builds the package and exercises the bundled browser. All `test/*.test.js` files are discovered automatically, including native updater tests.
 3. Merge the reviewed change. If the merged tree is identical to the tested source, promote those exact artifacts. Otherwise run the Windows package workflow on the merged source and wait for its platform matrix. Record the exact tested source SHA and successful Windows workflow run ID.
 4. Dispatch **Publish tested Windows release** on `main` with `run_id`, `source_sha`, and `tag`. The publisher checks the successful package and matrix runs, verifies the downloaded artifact checksum and bundled version, and uploads all three original tested ZIPs and checksums. It refuses to overwrite an existing release.
-5. Verify both assets are uploaded, their digest agrees with the sidecar, and the previous macOS release remains GitHub's latest stable release.
+5. Verify all assets are uploaded, their digests agree with the sidecars, and the macOS release remains GitHub's latest release (`gh api repos/joymadhu49/marlin/releases/latest --jq .tag_name`).
 
 ## User experience
 
