@@ -55,11 +55,16 @@ try {
     console.log(`Verified ${name}: sha256:${actual}, source ${source}, build ${runId}`);
     uploads.push(archive, `${archive}.sha256`);
   }
-  // Preserve releases/latest for the signed macOS appcast used by existing Macs.
+  // Preserve releases/latest for the signed macOS appcast used by existing Macs:
+  // a Windows release is a full release but is never selected as latest.
   const notes = join(dir, 'release-notes.md');
-  writeFileSync(notes, `${readFileSync('docs/windows-release-notes.md', 'utf8')}\n\nSource: ${source}. Tested packages: https://github.com/${repo}/actions/runs/${runId}.\n`);
+  const template = readFileSync('docs/windows-release-notes.md', 'utf8')
+    .replaceAll('{{VERSION}}', tag.slice(1))
+    .replaceAll('{{DOWNLOAD}}', `https://github.com/${repo}/releases/download/${tag}`);
+  if (/\{\{|\}\}/.test(template)) throw new Error('Unresolved placeholder in docs/windows-release-notes.md');
+  writeFileSync(notes, `${template}\nSource commit: \`${source}\`. Tested packages: https://github.com/${repo}/actions/runs/${runId}\n`);
   console.log(gh(['release', 'create', tag, ...uploads, '--repo', repo,
-    '--target', source, '--prerelease', '--latest=false', '--title', `Marlin ${tag.slice(1)} — Windows x64, ARM64 and x86`,
+    '--target', source, '--latest=false', '--title', `Marlin ${tag.slice(1)} for Windows (x64, ARM64, x86)`,
     '--notes-file', notes]));
 } finally {
   rmSync(dir, { recursive: true, force: true });

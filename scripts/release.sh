@@ -40,9 +40,17 @@ verify_unused_tag() {
 }
 verify_source
 
+# The release page marked "Latest" lists every platform. The Windows channel
+# version comes from its workflow; MARLIN_WINDOWS_VERSION=none leaves it out.
+WINDOWS_VERSION="${MARLIN_WINDOWS_VERSION:-$(sed -n "s/^ *MARLIN_WINDOWS_VERSION: *'\(.*\)' *$/\1/p" .github/workflows/windows.yml 2>/dev/null | head -1 || true)}"
+[ "$WINDOWS_VERSION" != none ] || WINDOWS_VERSION=""
+
 if ! "$PREPARE_ONLY"; then
   gh release view "v$VERSION" -R "$REPO" >/dev/null 2>&1 && { echo "v$VERSION is already released. Bump package.json first."; exit 1; }
   verify_unused_tag
+  if [ -n "$WINDOWS_VERSION" ]; then
+    gh release view "v$WINDOWS_VERSION" -R "$REPO" >/dev/null 2>&1 || { echo "The notes link to Windows release v$WINDOWS_VERSION, which is not published. Publish it first or set MARLIN_WINDOWS_VERSION=none." >&2; exit 1; }
+  fi
 fi
 awk -v version="$VERSION" '$1 == "##" && $2 == version { found = 1 } END { exit !found }' CHANGELOG.md || { echo "Add a '## $VERSION' section to CHANGELOG.md"; exit 1; }
 xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null || { echo "Cannot access notarytool profile '$PROFILE'; unlock the keychain and verify the profile." >&2; exit 1; }
@@ -110,9 +118,26 @@ cat > dist/appcast.xml <<XML
 XML
 
 step "Preparing release notes and checksums"
-awk -v v="## $VERSION" '$0 ~ "^## " { p = ($0 == v || index($0, v" ") == 1); next } p' CHANGELOG.md > dist/build/notes.md
-printf '\n\nmacOS 13 or later, Apple Silicon (arm64). Chromium %s. Signed and notarized; updates install through Sparkle.\n\nInstall for humans: open the DMG and drag Marlin to Applications.\nInstall for agents: `curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/get-marlin.sh | bash`\n' "$CHROMIUM" "$REPO" >> dist/build/notes.md
-printf '\nSource commit: `%s`\n' "$SOURCE" >> dist/build/notes.md
+DOWNLOAD="https://github.com/$REPO/releases/download"
+{
+  printf "## What's new\n\n"
+  awk -v v="## $VERSION" '$0 ~ "^## " { p = ($0 == v || index($0, v" ") == 1); next } p && NF' CHANGELOG.md
+  printf '\n## Download\n\n| Platform | File | Notes |\n| --- | --- | --- |\n'
+  printf '| macOS 13 or later, Apple Silicon (arm64) | [Marlin-%s.dmg](%s/v%s/Marlin-%s.dmg) | Signed and notarized. Updates install inside Marlin. |\n' "$VERSION" "$DOWNLOAD" "$VERSION" "$VERSION"
+  if [ -n "$WINDOWS_VERSION" ]; then
+    while IFS='|' read -r arch platform note; do
+      printf '| %s | [Marlin-%s-windows-%s.zip](%s/v%s/Marlin-%s-windows-%s.zip) | %s |\n' "$platform" "$WINDOWS_VERSION" "$arch" "$DOWNLOAD" "$WINDOWS_VERSION" "$WINDOWS_VERSION" "$arch" "$note"
+    done <<'ROWS'
+x64|Windows 10 or 11, Intel or AMD (x64)|Most Windows PCs.
+arm64|Windows 11 on ARM (arm64)|Snapdragon and other ARM PCs.
+x86|Windows, 32-bit runtime (x86)|Only when a 32-bit build is required.
+ROWS
+    printf '\nWindows packages are unsigned portable ZIPs, so Windows may warn before the first run. Checksums, setup steps and limits are on the [Windows release](https://github.com/%s/releases/tag/v%s).\n' "$REPO" "$WINDOWS_VERSION"
+  fi
+  printf '\n## Install\n\n- **macOS:** open the DMG and drag Marlin to Applications.\n- **macOS, for agents:** `curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/get-marlin.sh | bash`\n' "$REPO"
+  if [ -n "$WINDOWS_VERSION" ]; then printf -- '- **Windows:** extract the ZIP and open `marlin.cmd` inside the extracted folder.\n'; fi
+  printf '\nChromium %s. Source commit: `%s`\n' "$CHROMIUM" "$SOURCE"
+} > dist/build/notes.md
 (cd dist && shasum -a 256 "Marlin-$VERSION.dmg" appcast.xml > SHA256SUMS-macos.txt)
 verify_source
 if "$PREPARE_ONLY"; then

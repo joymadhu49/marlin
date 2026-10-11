@@ -2,9 +2,13 @@
 
 ## 0.3.0
 
-- Integrate the browser, daemon, extension and updater reliability fixes into the macOS release line.
-- Prepare Windows packages for x64, ARM64 and x86, with architecture-specific in-browser updates and checksums.
-- Keep macOS Sparkle and installed Windows updater channels compatible.
+- Marlin now runs on Windows as well as macOS, with x64, ARM64 and x86 packages that update inside the browser.
+- Steadier agent sessions: the daemon survives malformed requests and startup races, and a cancelled agent run stops cleanly.
+- Navigation accepts a bare host and port such as localhost:3000 and keeps browser schemes and IPv6 addresses intact.
+- Safer extension installs: store packages are validated before unpacking, and a local extension keeps its source folder when reinstalled.
+- Keyboard shortcuts release their modifier keys after an error, and a stale element reference is rejected instead of acting on the wrong element.
+- Update problems now show in the sidebar and on the About page with a way to retry.
+- The updater follows a custom MARLIN_HOME profile location.
 
 ## 0.3.0-windows.3
 
