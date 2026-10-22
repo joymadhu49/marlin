@@ -111,7 +111,7 @@ Android requires a separate app and browser-engine integration; see [Android por
 
 ## Tests
 
-The server regression tests run without Chromium or Keychain access and were verified on Node 22.22.3. The script enables Node's experimental module mocking support.
+The server regression tests run without Chromium or Keychain access and were verified on Node 22.23.4. The script enables Node's experimental module mocking support.
 
 ```
 npm run test:server
@@ -120,7 +120,7 @@ npm run test:server
 Run all browser-independent regressions:
 
 ```
-npm run test:unit       # browser-independent regressions; Node 22.22.3
+npm run test:unit       # browser-independent regressions; Node 22.23.4
 ```
 
 GitHub Actions runs the unit suite on Linux, macOS and Windows. Native Windows DPAPI checks run only on Windows. Linux CI coverage does not imply a supported Linux browser distribution.

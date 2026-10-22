@@ -1,6 +1,6 @@
 # Build with matching Node and Chromium architectures on Windows.
 param(
-    [string]$NodeVersion = '22.22.3',
+    [string]$NodeVersion = '22.23.4',
     [ValidateSet('x64', 'arm64', 'x86')][string]$Architecture = 'x64',
     [string]$Version = $env:MARLIN_WINDOWS_VERSION
 )
