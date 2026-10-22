@@ -1,8 +1,8 @@
-<p>Marlin for Windows, with packages for x64, ARM64 and x86 and updates inside the browser.</p>
+<p>Security update for Marlin on Windows: the bundled Node.js runtime moves to 22.23.4 from the October 21, 2026 Node.js security release.</p>
 <ul>
+<li>Fixes a Brotli decoder memory corruption that could allow remote code execution.</li>
+<li>Fixes TLS hostname verification bypasses and other issues listed in the Node.js advisory.</li>
 <li>Packages for x64, ARM64 and x86. Updates keep the architecture you installed.</li>
-<li>Marlin checks for a new release after it opens. Install it from the About page or the sidebar.</li>
-<li>Every update is verified against its published SHA256 before it replaces the app.</li>
 <li>Profiles, extensions, settings and saved secrets stay in place across updates.</li>
 </ul>
 
@@ -27,7 +27,7 @@ Each ZIP has a matching `.sha256` file under Assets. Looking for macOS? Use the 
 
 Marlin checks for releases after opening. Use **Install and restart** on the About page (`chrome://settings/help`) or **Install** in the sidebar. Updates select the installed architecture, verify the release checksum and GitHub asset digest, stage the new application, and reopen it. Profiles, extensions, settings and DPAPI-protected secrets remain in the external data directory. Close MCP clients before restarting so they release their bundled runtime.
 
-Existing `0.3.0-windows.2` x64 users can install this release from inside Marlin. The original `.1` preview has no updater and needs one manual installation. To migrate a per-user installation, close Marlin and MCP clients, rename the existing `%LOCALAPPDATA%\Programs\Marlin` app folder to a backup, then run the new package's `install.ps1`. Leave `%LOCALAPPDATA%\Marlin` data in place. Keep a custom `MARLIN_HOME` outside the application folder.
+Existing `0.3.0-windows.2` and `0.3.0-windows.3` users can install this release from inside Marlin. The original `.1` preview has no updater and needs one manual installation. To migrate a per-user installation, close Marlin and MCP clients, rename the existing `%LOCALAPPDATA%\Programs\Marlin` app folder to a backup, then run the new package's `install.ps1`. Leave `%LOCALAPPDATA%\Marlin` data in place. Keep a custom `MARLIN_HOME` outside the application folder.
 
 ## Good to know
 

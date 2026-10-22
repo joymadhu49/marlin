@@ -6,7 +6,7 @@ A Chromium browser built for AI agents. Claude Code, Codex, Hermes, Cursor or an
 
 **macOS (Apple Silicon, macOS 13+):** download the DMG from [Releases](https://github.com/joymadhu49/marlin/releases/latest), open it and drag Marlin to Applications. It is signed and notarized, and updates itself through [Sparkle](https://sparkle-project.org).
 
-**Windows (x64, ARM64 and x86):** download the ZIP and `.sha256` sidecar from the [Windows release](https://github.com/joymadhu49/marlin/releases/tag/v0.3.0-windows.3). Compare `Get-FileHash <zip> -Algorithm SHA256` with the sidecar, extract the ZIP, and double-click `marlin.cmd` inside the extracted `Marlin-win32-<architecture>` folder. Node and Chromium are included. This release is unsigned and uses the Chromium window branding. Marlin checks for updates after opening; use **Install and restart** on its About page or **Install** in the sidebar to update without downloading another ZIP. Users of the original `0.3.0-windows.1` preview must install this version once to gain the updater.
+**Windows (x64, ARM64 and x86):** download the ZIP and `.sha256` sidecar from the [Windows release](https://github.com/joymadhu49/marlin/releases/tag/v0.3.1-windows.1). Compare `Get-FileHash <zip> -Algorithm SHA256` with the sidecar, extract the ZIP, and double-click `marlin.cmd` inside the extracted `Marlin-win32-<architecture>` folder. Node and Chromium are included. This release is unsigned and uses the Chromium window branding. Marlin checks for updates after opening; use **Install and restart** on its About page or **Install** in the sidebar to update without downloading another ZIP. Users of the original `0.3.0-windows.1` preview must install this version once to gain the updater.
 
 Optional Windows installation (PowerShell, from the extracted folder):
 
@@ -133,7 +133,7 @@ To build a Windows package from source on Windows x64:
 npm install --global pnpm@10.28.2
 pnpm install --frozen-lockfile
 node src/cli.js fetch-chromium
-$env:MARLIN_WINDOWS_VERSION = '0.3.0-windows.3'
+$env:MARLIN_WINDOWS_VERSION = '0.3.1-windows.1'
 npm run build:windows -- -Architecture x64
 $env:MARLIN_APP_ROOT = Join-Path $PWD 'dist\Marlin-win32-x64'
 node test/windows-smoke.js
