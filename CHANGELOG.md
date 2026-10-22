@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Security update: Marlin now bundles a patched Node.js runtime from the October 21, 2026 Node.js security release (26.12.1 on macOS, 22.23.4 on Windows). It fixes a Brotli decoder memory corruption that could allow remote code execution and TLS hostname verification bypasses.
+
+## 0.3.1-windows.1
+
+- Bundle Node.js 22.23.4 for the October 21, 2026 Node.js security release on x64, ARM64 and x86.
+
 ## 0.3.0
 
 - Marlin now runs on Windows as well as macOS, with x64, ARM64 and x86 packages that update inside the browser.
